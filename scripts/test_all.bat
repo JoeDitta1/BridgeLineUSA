@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 setlocal EnableExtensions EnableDelayedExpansion
 echo === BridgeLineUSA: test_all (Node monorepo) ===
 
@@ -8,16 +8,9 @@ if exist backend\package.json (
   pushd backend
   call npm ci || exit /b 1
 
-  REM Detect if a "test" script exists; if yes, run it; else skip.
-  for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command ^
-    "$p=Get-Content package.json -Raw | ConvertFrom-Json; if($p.scripts -and $p.scripts.PSObject.Properties.Name -contains 'test'){exit 0}else{exit 1}"`) do set HAS_TEST=%%A
+  echo [backend] running tests if present...
+  call npm run test --if-present -- --watchAll=false || exit /b 1
 
-  if "!ERRORLEVEL!"=="0" (
-    echo [backend] running tests...
-    call npm test -- --watchAll=false || exit /b 1
-  ) else (
-    echo [backend] no test script found - skipping tests
-  )
   popd
 ) else (
   echo [backend] no backend/package.json - skipping backend
@@ -29,16 +22,8 @@ if exist frontend\package.json (
   pushd frontend
   call npm ci || exit /b 1
 
-  REM Detect if a "test" script exists; if yes, run it; else skip.
-  for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command ^
-    "$p=Get-Content package.json -Raw | ConvertFrom-Json; if($p.scripts -and $p.scripts.PSObject.Properties.Name -contains 'test'){exit 0}else{exit 1}"`) do set HAS_TEST=%%A
-
-  if "!ERRORLEVEL!"=="0" (
-    echo [frontend] running tests...
-    call npm test -- --watchAll=false || exit /b 1
-  ) else (
-    echo [frontend] no test script found - skipping tests
-  )
+  echo [frontend] running tests if present...
+  call npm run test --if-present -- --watchAll=false || exit /b 1
 
   echo [frontend] building for sanity...
   call npm run build || exit /b 1
