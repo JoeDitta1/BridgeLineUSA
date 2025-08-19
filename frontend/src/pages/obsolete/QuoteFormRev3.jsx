@@ -311,16 +311,9 @@ async function saveQuoteAPI(payload) {
       rev: Number.isFinite(payload.rev) ? payload.rev : 0
     }),
   });
-  // Read raw text first; handle cases where server may return HTML or non-JSON
-  const text = await res.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch (e) {
-    throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
-  }
-  if (!res.ok || data.ok === false) {
-    throw new Error(data?.detail || data?.error || `Save failed (${res.status})`);
+  const data = await res.json();
+  if (!res.ok || !data.ok) {
+    throw new Error(data?.error || `Save failed (${res.status})`);
   }
   return data;
 }
@@ -343,20 +336,9 @@ async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  // Read raw text first; handle cases where server may return HTML or non-JSON
-  const text = await res.text();
-  // If the endpoint does not exist (404), treat as success and skip JSON parsing
-  if (res.status === 404) {
-    return { ok: true, skipped: true };
-  }
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch (e) {
-    throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
-  }
-  if (!res.ok || data.ok === false) {
-    throw new Error(data?.detail || data?.error || `Save failed (${res.status})`);
+  const data = await res.json();
+  if (!res.ok || !data.ok) {
+    throw new Error(data?.error || `Save failed (${res.status})`);
   }
   return data; // { ok, quoteNo, customerName, metaPath, quoteDir }
 }
@@ -413,15 +395,8 @@ export default function QuoteForm() {
       if (!routeQuoteNo) return;
       try {
         const resp = await fetch(`${API_BASE}/api/quotes/${encodeURIComponent(routeQuoteNo)}/meta`);
-        // Read raw text first; handle cases where server may return HTML (e.g. dev server 404)
-        const text = await resp.text();
-        let json;
-        try {
-          json = text ? JSON.parse(text) : {};
-        } catch (e) {
-          throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
-        }
-        if (!resp.ok || json.ok === false) throw new Error(json.error || 'Failed to load quote meta');
+        const json = await resp.json();
+        if (!resp.ok || !json.ok) throw new Error(json.error || 'Failed to load quote meta');
 
         const form = json?.meta?.form || {};
         const app = form.appState || {};
@@ -470,14 +445,7 @@ export default function QuoteForm() {
     (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/materials`);
-        // Read raw text first to handle HTML or non-JSON responses
-        const text = await res.text();
-        let rows;
-        try {
-          rows = text ? JSON.parse(text) : [];
-        } catch (e) {
-          throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
-        }
+        const rows = await res.json();
         let base = (rows || []).map(toMatOption).map(augmentOption);
         base = mergeUniqueByValue(base, buildPlateOptions());
         base = mergeUniqueByValue(base, buildSheetOptions());

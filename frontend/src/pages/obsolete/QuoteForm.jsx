@@ -345,10 +345,6 @@ async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
   });
   // Read raw text first; handle cases where server may return HTML or non-JSON
   const text = await res.text();
-  // If the endpoint does not exist (404), treat as success and skip JSON parsing
-  if (res.status === 404) {
-    return { ok: true, skipped: true };
-  }
   let data = {};
   try {
     data = text ? JSON.parse(text) : {};

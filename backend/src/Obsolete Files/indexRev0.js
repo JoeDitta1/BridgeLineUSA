@@ -1,30 +1,28 @@
 // src/index.js
-import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path, { dirname } from 'path';
 import fs from 'fs';
-import fsPromises from 'fs/promises';
 import { fileURLToPath } from 'url';
-
 import quoteFilesRoute from './routes/quoteFilesRoute.js';
+
 import uploadRoute from './uploadRoute.js';
 import materialsRoute from './materialsRoute.js';
 import quotesRoute from './routes/quotesRoute.js';
 import settingsRoute from './routes/settingsRoute.js';
 import * as dbModule from './db.js';
 
-/* ------------------------- ES module __dirname shim ------------------------ */
+// --- ES module __dirname shim ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/* ----------------------------- DB compatibility --------------------------- */
+// Ensure DB export compatibility
 const db = dbModule.default ?? dbModule.db ?? dbModule;
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-/* ------------------------------- Migrations ------------------------------- */
+/** --- Idempotent migrations --- */
 db.exec?.(`
 CREATE TABLE IF NOT EXISTS quotes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,91 +72,41 @@ if (!srow) {
   `)?.run?.();
 }
 
-/* -------------------------------- Middleware ------------------------------ */
-app.use(
-  cors({
-    origin: [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/],
-    credentials: true,
-  })
-);
+/** --- Middleware --- */
+app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
-/* --------------------------- File serving roots --------------------------- */
-// You can override these in backend/.env
-// DATA_ROOT is optional; QUOTE_ROOT/UPLOADS_DIR take precedence where used
-const DATA_ROOT = process.env.DATA_ROOT || path.resolve(__dirname, '../data');
-
-// UPLOADS
-const UPLOADS_DIR =
-  process.env.UPLOADS_DIR || path.resolve(DATA_ROOT, 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
+// Serve uploaded files from /uploads  (from backend/data/uploads)
+const UPLOADS_DIR = path.resolve(__dirname, '../data/uploads');
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// QUOTE FOLDERS (use QUOTE_ROOT from .env)
-const QUOTES_FILES_ROOT =
-  process.env.QUOTE_ROOT || path.resolve(DATA_ROOT, 'quotes');
-if (!fs.existsSync(QUOTES_FILES_ROOT)) {
-  fs.mkdirSync(QUOTES_FILES_ROOT, { recursive: true });
-}
+// Serve quote folders: /files/<CustomerName>/<QuoteNo>/<subdir>/<filename>
+const QUOTES_FILES_ROOT = path.resolve(__dirname, '../data/quotes');
 app.use('/files', express.static(QUOTES_FILES_ROOT));
 
-/* --------------------------------- Routes -------------------------------- */
+/** --- API routes --- */
 app.use('/api/upload', uploadRoute);
 app.use('/api/materials', materialsRoute);
 app.use('/api/quotes', quotesRoute);
 
-// File routes mounted under /api/quotes to match frontend expectations
+// Mount file routes under /api/quotes to match frontend expectations
 app.use('/api/quotes', quoteFilesRoute);
-// Optional legacy mount
+
+// (Optional) keep legacy mount if linked elsewhere
 app.use('/api/quote-files', quoteFilesRoute);
 
-// Health route
-app.get('/api/health', (req, res) => {
-  let version = 'unknown';
-  try {
-    const pkg = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')
-    );
-    version = pkg.version || version;
-  } catch {}
-  res.json({
-    ok: true,
-    service: 'SCM-AI API',
-    version,
-    time: new Date().toISOString(),
-    quoteRoot: QUOTES_FILES_ROOT,
-    uploadsDir: UPLOADS_DIR,
-  });
-});
+app.use('/api/settings', settingsRoute);
 
-// Optional: folder smoke test to verify permissions/paths quickly
-app.get('/api/_test_folders', async (req, res) => {
-  try {
-    const root = QUOTES_FILES_ROOT;
-    const testRoot = path.join(root, 'TEST');
-    await fsPromises.mkdir(path.join(testRoot, 'Files'), { recursive: true });
-    await fsPromises.mkdir(path.join(testRoot, 'Quote'), { recursive: true });
-    await fsPromises.mkdir(path.join(testRoot, 'Supplier Information'), { recursive: true });
-    res.json({ ok: true, base: root });
-  } catch (e) {
-    console.error('Folder test failed:', e);
-    res.status(500).json({ ok: false, error: String(e) });
-  }
-});
-
-/* ------------------------- Static serve for production -------------------- */
-/**
+/** --- Static serve for production (optional) ---
  * Build:  cd ..\frontend && npm run build
- * Serve:  set SERVE_FRONTEND=true  (Windows) then start backend
+ * Serve:  npm run serve:prod   (sets SERVE_FRONTEND=true)
  */
-const BACKEND_ROOT = path.resolve(__dirname, '..');     // C:\SCM-AI\backend
-const MONO_ROOT = path.resolve(BACKEND_ROOT, '..');     // C:\SCM-AI
+const BACKEND_ROOT = path.resolve(__dirname, '..');          // C:\SCM-AI\backend
+const MONO_ROOT    = path.resolve(BACKEND_ROOT, '..');       // C:\SCM-AI
 
 const candidates = [
-  path.resolve(MONO_ROOT, 'frontend', 'build'),
-  path.resolve(MONO_ROOT, 'client', 'build'),
+  path.resolve(MONO_ROOT, 'frontend', 'build'),  // C:\SCM-AI\frontend\build
+  path.resolve(MONO_ROOT, 'client', 'build'),    // fallback if someone kept 'client'
 ];
 
 const FRONTEND_BUILD_DIR = candidates.find(p => {
@@ -181,14 +129,12 @@ if (process.env.SERVE_FRONTEND === 'true' && FRONTEND_BUILD_DIR) {
   console.log('[Static] Disabled or build not found. (Set SERVE_FRONTEND=true after building the frontend.)');
 }
 
-/* ------------------------------- Root route ------------------------------- */
+// Root test route
 app.get('/', (req, res) => {
   res.send('SCM-AI backend is running');
 });
 
-/* --------------------------------- Start --------------------------------- */
+// Start server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
-  console.log(`Uploads: ${UPLOADS_DIR}`);
-  console.log(`Quote folders: ${QUOTES_FILES_ROOT}`);
 });
