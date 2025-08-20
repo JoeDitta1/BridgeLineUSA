@@ -1,38 +1,7 @@
-﻿# --- ROOT ---
-Obsolete Not used/
-init-part1.ps1
-
-# --- FRONTEND (React) ---
+﻿node_modules/
+.env
 frontend/node_modules/
-frontend/build/
-frontend/.env
-frontend/.cache/
-frontend/dist/
-frontend/coverage/
-frontend/npm-debug.log*
-frontend/yarn-error.log*
-
-# --- BACKEND (Node/Express) ---
 backend/node_modules/
-backend/.env
-backend/coverage/
-backend/npm-debug.log*
-backend/yarn-error.log*
-
-# Runtime data & uploads (created by the app, not source code)
+frontend/build/
 backend/uploads/
 backend/data/
-
-# --- Python (future-proof) ---
-**/__pycache__/
-**/*.pyc
-**/*.pyo
-venv/
-.env
-!.env.sample   # <-- allow sample env files
-
-# --- OS/IDE ---
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
