@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Select from 'react-select';
 import UploadButton from '../components/UploadButton';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+const API_BASE = "";
 
 /* --------------------------------- Helpers --------------------------------- */
 
@@ -296,7 +296,7 @@ const augmentOption = (o) => {
 
 /* ======================= NEW: Save helpers for backend ======================= */
 async function saveQuoteAPI(payload) {
-  const res = await fetch(`${API_BASE}/api/quotes`, {
+  const res = await fetch(`/api/quotes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -331,7 +331,7 @@ async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
     appState: { meta, rows, nde },
   };
 
-  const res = await fetch(`${API_BASE}/api/quotes/save`, {
+  const res = await fetch(`/api/quotes/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -394,7 +394,7 @@ export default function QuoteForm() {
     (async () => {
       if (!routeQuoteNo) return;
       try {
-        const resp = await fetch(`${API_BASE}/api/quotes/${encodeURIComponent(routeQuoteNo)}/meta`);
+        const resp = await fetch(`/api/quotes/${encodeURIComponent(routeQuoteNo)}/meta`);
         const json = await resp.json();
         if (!resp.ok || !json.ok) throw new Error(json.error || 'Failed to load quote meta');
 
@@ -444,7 +444,7 @@ export default function QuoteForm() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/materials`);
+        const res = await fetch(`/api/materials`);
         const rows = await res.json();
         let base = (rows || []).map(toMatOption).map(augmentOption);
         base = mergeUniqueByValue(base, buildPlateOptions());

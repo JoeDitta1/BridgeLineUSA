@@ -1,93 +1,74 @@
-// src/materialsRoute.js
-import express from "express";
-import fs from "fs";
-import path from "path";
+import express from 'express';
+import { db } from '../db.js';
 
 const router = express.Router();
 
-// Your materials.json lives one level up from the Part2 folder
-const JSON_PATH = path.resolve(process.cwd(), "..", "materials.json");
-
-/** ---------- helpers (non-breaking enrich) ---------- **/
-
-// Parse inches like "3", "3/8", "2-1/2" -> Number(inches)
-function parseInches(txt) {
-  if (!txt) return NaN;
-  const s = String(txt).trim();
-  if (s.includes("-")) {
-    const [whole, frac] = s.split("-");
-    return parseFloat(whole) + parseInches(frac);
-  }
-  if (s.includes("/")) {
-    const [n, d] = s.split("/");
-    const nn = parseFloat(n);
-    const dd = parseFloat(d);
-    if (!isFinite(nn) || !isFinite(dd) || dd === 0) return NaN;
-    return nn / dd;
-  }
-  const n = parseFloat(s);
-  return isFinite(n) ? n : NaN;
-}
-
-// Angle size strings like "L3x3x1/4" or "L3x2-1/2x3/16"
-function parseAngleSize(sizeStr) {
-  if (!sizeStr) return null;
-  const s = String(sizeStr).trim().toUpperCase();
-  if (!s.startsWith("L")) return null;
-  const body = s.slice(1);
-  const parts = body.split("X");
-  if (parts.length < 3) return null;
-
-  const leg1 = parseInches(parts[0]);
-  const leg2 = parseInches(parts[1]);
-  const thick = parseInches(parts[2]);
-
-  if (![leg1, leg2, thick].every(v => isFinite(v) && v > 0)) return null;
-  return { leg1, leg2, thick };
-}
-
-// Area ≈ t * (b1 + b2 - t); Weight(lb/ft) ≈ Area(in^2) * 12 * 0.283 ≈ Area * 3.396
-function computeAngleWeightPerFt({ leg1, leg2, thick }) {
-  const area = thick * (leg1 + leg2 - thick);
-  const w = area * 3.396;
-  return Math.round(w * 100) / 100; // 2 decimals
-}
-
-function enrichMaterialRow(row) {
-  const r = { ...row };
-  if (r.family && String(r.family).toLowerCase() === "angle") {
-    const parsed = parseAngleSize(r.size);
-    if (parsed) {
-      const w = computeAngleWeightPerFt(parsed);
-      if (r.weight_per_ft == null && isFinite(w)) {
-        // non-breaking: add a *new* field, leave existing fields untouched
-        r.computed_weight_per_ft = w; // lb/ft
-      }
-    }
-  }
-  return r;
-}
-
-/** ---------- route (same path & behavior) ---------- **/
-
-router.get("/", (_req, res) => {
+/**
+ * GET /api/materials/families
+ * Returns list of distinct material families (e.g., Plate, Angle, Tube, etc.)
+ */
+router.get('/families', (req, res) => {
   try {
-    const text = fs.readFileSync(JSON_PATH, "utf8");
-    const data = JSON.parse(text);
-    // Accept either a plain array or { materials: [...] }
-    const list = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.materials)
-      ? data.materials
-      : [];
-
-    // Enrich rows without changing original fields
-    const enriched = list.map(enrichMaterialRow);
-
-    res.json(enriched);
+    const rows = db.prepare(`SELECT DISTINCT family FROM materials ORDER BY family`).all();
+    res.json({ ok: true, families: rows.map(r => r.family) });
   } catch (e) {
-    console.error("materials.json read error:", e.message);
-    res.json([]); // client will still show Plate/Sheet fallbacks
+    console.error('[materials:families] error:', e);
+    res.status(500).json({ ok: false, error: 'Failed to fetch families' });
+  }
+});
+
+/**
+ * GET /api/materials/sizes?family=Plate
+ * Returns list of sizes for a given family.
+ */
+router.get('/sizes', (req, res) => {
+  try {
+    const { family } = req.query;
+    if (!family) return res.status(400).json({ ok: false, error: 'family is required' });
+    const rows = db.prepare(
+      `SELECT size FROM materials WHERE family = ? ORDER BY size`
+    ).all(family);
+    res.json({ ok: true, sizes: rows.map(r => r.size) });
+  } catch (e) {
+    console.error('[materials:sizes] error:', e);
+    res.status(500).json({ ok: false, error: 'Failed to fetch sizes' });
+  }
+});
+
+/**
+ * GET /api/materials
+ * Optional filters:
+ *   - family=Plate
+ *   - q=2x2  (substring match against size/description/grade)
+ *   - limit=100 (default 100)
+ */
+router.get('/', (req, res) => {
+  try {
+    const { family, q } = req.query;
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit || '100', 10), 1000));
+
+    let sql = `SELECT id, family, size, unit_type, grade, price_per_lb, price_per_ft, price_each, description
+               FROM materials`;
+    const where = [];
+    const params = [];
+
+    if (family) {
+      where.push(`family = ?`);
+      params.push(family);
+    }
+    if (q) {
+      where.push(`(size LIKE ? OR IFNULL(description,'') LIKE ? OR IFNULL(grade,'') LIKE ?)`);
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    }
+    if (where.length) sql += ` WHERE ` + where.join(' AND ');
+    sql += ` ORDER BY family, size LIMIT ?`;
+    params.push(limit);
+
+    const rows = db.prepare(sql).all(...params);
+    res.json({ ok: true, materials: rows });
+  } catch (e) {
+    console.error('[materials:list] error:', e);
+    res.status(500).json({ ok: false, error: 'Failed to fetch materials' });
   }
 });
 

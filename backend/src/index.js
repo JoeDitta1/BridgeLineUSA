@@ -1,194 +1,50 @@
-// src/index.js
-import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import path, { dirname } from 'path';
-import fs from 'fs';
-import fsPromises from 'fs/promises';
-import { fileURLToPath } from 'url';
-
-import quoteFilesRoute from './routes/quoteFilesRoute.js';
-import uploadRoute from './uploadRoute.js';
-import materialsRoute from './materialsRoute.js';
-import quotesRoute from './routes/quotesRoute.js';
-import settingsRoute from './routes/settingsRoute.js';
-import * as dbModule from './db.js';
-
-/* ------------------------- ES module __dirname shim ------------------------ */
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-/* ----------------------------- DB compatibility --------------------------- */
-const db = dbModule.default ?? dbModule.db ?? dbModule;
+import quotesRouter from './routes/quotesRoute.js';
+import materialsRouter from './routes/materialsRoute.js';
+import { migrate } from './db.js';
 
 const app = express();
-const PORT = process.env.PORT || 4000;
 
-/* ------------------------------- Migrations ------------------------------- */
-db.exec?.(`
-CREATE TABLE IF NOT EXISTS quotes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  quote_no TEXT NOT NULL UNIQUE,
-  customer_name TEXT NOT NULL,
-  description TEXT,
-  requested_by TEXT,
-  estimator TEXT,
-  date TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'Draft',
-  sales_order_no TEXT,
-  rev INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_quotes_date ON quotes(date);
-CREATE INDEX IF NOT EXISTS idx_quotes_customer ON quotes(customer_name);
-`);
+// CORS that works with Codespaces
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin
+    if (!origin) return callback(null, true);
+    
+    // Allow any GitHub Codespaces domain
+    if (origin.includes('.app.github.dev')) {
+      return callback(null, true);
+    }
+    
+    // Allow localhost for local development
+    if (origin.includes('localhost')) {
+      return callback(null, true);
+    }
+    
+    callback(null, true); // Allow all for now
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
 
-function ensureColumn(table, col, typeDefault) {
-  const cols = db.prepare?.(`PRAGMA table_info(${table})`)?.all?.() ?? [];
-  const exists = cols.some(c => c.name === col);
-  if (!exists) db.exec?.(`ALTER TABLE ${table} ADD COLUMN ${col} ${typeDefault}`);
-}
-ensureColumn('quotes', 'description', 'TEXT');
-ensureColumn('quotes', 'requested_by', 'TEXT');
-ensureColumn('quotes', 'estimator', 'TEXT');
-ensureColumn('quotes', 'rev', 'INTEGER NOT NULL DEFAULT 0');
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
-db.exec?.(`
-CREATE TABLE IF NOT EXISTS settings (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  org_prefix TEXT NOT NULL DEFAULT 'SCM',
-  system_abbr TEXT,
-  quote_series TEXT NOT NULL DEFAULT 'Q',
-  quote_pad INTEGER NOT NULL DEFAULT 4,
-  next_quote_seq INTEGER NOT NULL DEFAULT 1,
-  sales_series TEXT NOT NULL DEFAULT 'S',
-  sales_pad INTEGER NOT NULL DEFAULT 3,
-  next_sales_seq INTEGER NOT NULL DEFAULT 1
-);
-`);
-const srow = db.prepare?.('SELECT id FROM settings WHERE id=1')?.get?.();
-if (!srow) {
-  db.prepare?.(`
-    INSERT INTO settings (id, org_prefix, system_abbr, quote_series, quote_pad, next_quote_seq, sales_series, sales_pad, next_sales_seq)
-    VALUES (1, 'SCM', NULL, 'Q', 4, 1, 'S', 3, 1)
-  `)?.run?.();
-}
+app.use(express.json());
 
-/* -------------------------------- Middleware ------------------------------ */
-app.use(
-  cors({
-    origin: [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/],
-    credentials: true,
-  })
-);
-app.use(express.json({ limit: '5mb' }));
+migrate();
 
-/* --------------------------- File serving roots --------------------------- */
-// You can override these in backend/.env
-// DATA_ROOT is optional; QUOTE_ROOT/UPLOADS_DIR take precedence where used
-const DATA_ROOT = process.env.DATA_ROOT || path.resolve(__dirname, '../data');
-
-// UPLOADS
-const UPLOADS_DIR =
-  process.env.UPLOADS_DIR || path.resolve(DATA_ROOT, 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
-app.use('/uploads', express.static(UPLOADS_DIR));
-
-// QUOTE FOLDERS (use QUOTE_ROOT from .env)
-const QUOTES_FILES_ROOT =
-  process.env.QUOTE_ROOT || path.resolve(DATA_ROOT, 'quotes');
-if (!fs.existsSync(QUOTES_FILES_ROOT)) {
-  fs.mkdirSync(QUOTES_FILES_ROOT, { recursive: true });
-}
-app.use('/files', express.static(QUOTES_FILES_ROOT));
-
-/* --------------------------------- Routes -------------------------------- */
-app.use('/api/upload', uploadRoute);
-app.use('/api/materials', materialsRoute);
-app.use('/api/quotes', quotesRoute);
-
-// File routes mounted under /api/quotes to match frontend expectations
-app.use('/api/quotes', quoteFilesRoute);
-// Optional legacy mount
-app.use('/api/quote-files', quoteFilesRoute);
-
-// Health route
 app.get('/api/health', (req, res) => {
-  let version = 'unknown';
-  try {
-    const pkg = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')
-    );
-    version = pkg.version || version;
-  } catch {}
-  res.json({
-    ok: true,
-    service: 'SCM-AI API',
-    version,
-    time: new Date().toISOString(),
-    quoteRoot: QUOTES_FILES_ROOT,
-    uploadsDir: UPLOADS_DIR,
-  });
+  res.json({ ok: true });
 });
 
-// Optional: folder smoke test to verify permissions/paths quickly
-app.get('/api/_test_folders', async (req, res) => {
-  try {
-    const root = QUOTES_FILES_ROOT;
-    const testRoot = path.join(root, 'TEST');
-    await fsPromises.mkdir(path.join(testRoot, 'Files'), { recursive: true });
-    await fsPromises.mkdir(path.join(testRoot, 'Quote'), { recursive: true });
-    await fsPromises.mkdir(path.join(testRoot, 'Supplier Information'), { recursive: true });
-    res.json({ ok: true, base: root });
-  } catch (e) {
-    console.error('Folder test failed:', e);
-    res.status(500).json({ ok: false, error: String(e) });
-  }
-});
+app.use('/api/quotes', quotesRouter);
+app.use('/api/materials', materialsRouter);
 
-/* ------------------------- Static serve for production -------------------- */
-/**
- * Build:  cd ..\frontend && npm run build
- * Serve:  set SERVE_FRONTEND=true  (Windows) then start backend
- */
-const BACKEND_ROOT = path.resolve(__dirname, '..');     // C:\SCM-AI\backend
-const MONO_ROOT = path.resolve(BACKEND_ROOT, '..');     // C:\SCM-AI
-
-const candidates = [
-  path.resolve(MONO_ROOT, 'frontend', 'build'),
-  path.resolve(MONO_ROOT, 'client', 'build'),
-];
-
-const FRONTEND_BUILD_DIR = candidates.find(p => {
-  try { return fs.existsSync(path.join(p, 'index.html')); } catch { return false; }
-});
-
-if (process.env.SERVE_FRONTEND === 'true' && FRONTEND_BUILD_DIR) {
-  console.log(`[Static] Serving frontend from: ${FRONTEND_BUILD_DIR}`);
-  app.use(express.static(FRONTEND_BUILD_DIR));
-  // SPA fallback (exclude API, uploads, files)
-  app.get('*', (req, res, next) => {
-    if (
-      req.path.startsWith('/api') ||
-      req.path.startsWith('/uploads') ||
-      req.path.startsWith('/files')
-    ) return next();
-    res.sendFile(path.join(FRONTEND_BUILD_DIR, 'index.html'));
-  });
-} else {
-  console.log('[Static] Disabled or build not found. (Set SERVE_FRONTEND=true after building the frontend.)');
-}
-
-/* ------------------------------- Root route ------------------------------- */
-app.get('/', (req, res) => {
-  res.send('SCM-AI backend is running');
-});
-
-/* --------------------------------- Start --------------------------------- */
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-  console.log(`Uploads: ${UPLOADS_DIR}`);
-  console.log(`Quote folders: ${QUOTES_FILES_ROOT}`);
+// IMPORTANT: Bind to 0.0.0.0, not localhost
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`API running on :${PORT}`);
 });

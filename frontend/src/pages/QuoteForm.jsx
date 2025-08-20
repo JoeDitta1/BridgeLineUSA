@@ -5,6 +5,7 @@ import Select from 'react-select';
 import UploadButton from '../components/UploadButton';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+console.log('API_BASE being used:', API_BASE);
 
 /* --------------------------------- Helpers --------------------------------- */
 
@@ -134,6 +135,7 @@ const genPlateThicknesses = () => {
   const set = Array.from(new Set(list.map(x => Number(x.toFixed(6))))).sort((a,b)=>a-b);
   return set;
 };
+
 /* -------- Normalize materials to react-select options + keyword index -------- */
 const toMatOption = (m) => {
   const familyRaw = m.type || m.category || m.family || '';
@@ -208,7 +210,6 @@ const mergeUniqueByValue = (a, b) => {
 };
 
 /* -------------------------- Geometry parsing helpers -------------------------- */
-// Parse tokens like 1/4, 0.25, 2", 2.5 in  → inches (number)
 const parseInches = (tok) => {
   if (!tok) return NaN;
   const t = String(tok).toLowerCase().replace(/["in]+/g,'').trim();
@@ -220,7 +221,6 @@ const parseInches = (tok) => {
   return Number.isFinite(n) ? n : NaN;
 };
 
-// Extract up to 4 numeric dims from size/description, splitting on x, ×, spaces, etc.
 const extractDims = (text) => {
   if (!text) return [];
   let s = String(text).toLowerCase()
@@ -239,7 +239,6 @@ const extractDims = (text) => {
   return dims.slice(0,4);
 };
 
-// Compute lb/ft from cross-section area (in^2) * 12 * density
 const wpfFromArea = (areaIn2, density=DENSITY_STEEL) => {
   if (!areaIn2 || areaIn2<=0) return 0;
   return Number((areaIn2 * 12 * density).toFixed(4));
@@ -249,7 +248,7 @@ const wpfFromArea = (areaIn2, density=DENSITY_STEEL) => {
 const inferWeightPerFt = (opt) => {
   const fam = normalizeFamily(opt.type || opt.family || opt.category || '');
   const sizeText = opt.size || opt.description || '';
-  const dims = extractDims(sizeText); // inches
+  const dims = extractDims(sizeText);
 
   if (!dims.length) return 0;
 
@@ -281,7 +280,6 @@ const inferWeightPerFt = (opt) => {
   return 0;
 };
 
-// Ensure weight_per_ft / weight_per_sqin where we can infer them.
 const augmentOption = (o) => {
   const out = { ...o };
   if (!num(out.weight_per_ft)) {
@@ -293,8 +291,7 @@ const augmentOption = (o) => {
   }
   return out;
 };
-
-/* ======================= NEW: Save helpers for backend ======================= */
+/* ======================= Save helpers for backend ======================= */
 async function saveQuoteAPI(payload) {
   const res = await fetch(`${API_BASE}/api/quotes`, {
     method: 'POST',
@@ -311,7 +308,6 @@ async function saveQuoteAPI(payload) {
       rev: Number.isFinite(payload.rev) ? payload.rev : 0
     }),
   });
-  // Read raw text first; handle cases where server may return HTML or non-JSON
   const text = await res.text();
   let data = {};
   try {
@@ -325,7 +321,6 @@ async function saveQuoteAPI(payload) {
   return data;
 }
 
-/** Saves full app state to _meta.json + DB (draft/final). */
 async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
   const payload = {
     quoteNo: (meta.quoteNo || '').trim() || undefined,
@@ -334,7 +329,7 @@ async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
     requested_by: (meta.requestor || '').trim() || null,
     estimator: (meta.estimatedBy || '').trim() || null,
     date: (meta.date || '').trim(),
-    status, // 'draft' | 'final'
+    status,
     appState: { meta, rows, nde },
   };
 
@@ -343,9 +338,7 @@ async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  // Read raw text first; handle cases where server may return HTML or non-JSON
   const text = await res.text();
-  // If the endpoint does not exist (404), treat as success and skip JSON parsing
   if (res.status === 404) {
     return { ok: true, skipped: true };
   }
@@ -358,18 +351,20 @@ async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
   if (!res.ok || data.ok === false) {
     throw new Error(data?.detail || data?.error || `Save failed (${res.status})`);
   }
-  return data; // { ok, quoteNo, customerName, metaPath, quoteDir }
+  return data;
 }
+
 /* ================================== App ================================== */
 export default function QuoteForm() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { quoteNo: routeQuoteNo } = useParams(); // ← used for hydration/navigation
+  const { quoteNo: routeQuoteNo } = useParams();
   const pre = location?.state || {};
 
   const [step, setStep] = useState(1);
-  const [uploads, setUploads] = useState([]); // [{name,url,subdir,size,mtime}]
+  const [uploads, setUploads] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const today = new Date().toISOString().slice(0,10);
   const [meta, setMeta] = useState({
@@ -387,10 +382,7 @@ export default function QuoteForm() {
     originRestriction: pre.originRestriction || '',
     receivingLaborHours: pre.receivingLaborHours || '',
     receivingRate: pre.receivingRate || '75',
-    notes:
-      pre.notes ||
-      'Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. ' +
-      'NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.',
+    notes: pre.notes || 'Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.',
     paymentTerms: pre.paymentTerms || '',
     commissionPct: pre.commissionPct || '',
     breakInFee: pre.breakInFee || '',
@@ -399,21 +391,18 @@ export default function QuoteForm() {
     salesTaxPct: pre.salesTaxPct || '',
   });
 
-  // Persist “SA” checkbox if ASME chosen
   useEffect(() => {
     if (/ASME/i.test(meta.quality) && !meta.requireSA) {
       setMeta(m => ({ ...m, requireSA: true }));
     }
   }, [meta.quality, meta.requireSA]);
 
-  /** HYDRATE from _meta.json if we landed on /quote/:quoteNo/edit */
   useEffect(() => {
     let active = true;
     (async () => {
       if (!routeQuoteNo) return;
       try {
         const resp = await fetch(`${API_BASE}/api/quotes/${encodeURIComponent(routeQuoteNo)}/meta`);
-        // Read raw text first; handle cases where server may return HTML (e.g. dev server 404)
         const text = await resp.text();
         let json;
         try {
@@ -427,7 +416,6 @@ export default function QuoteForm() {
         const app = form.appState || {};
         if (!active) return;
 
-        // merge in saved app state
         if (app.meta) setMeta(prev => ({ ...prev, ...app.meta, quoteNo: routeQuoteNo }));
         if (Array.isArray(app.rows)) setRows(app.rows.map(r => ({ _uiOpen: true, _uiMarkupPct: r._uiMarkupPct || '', ...r })));
         if (Array.isArray(app.nde)) setNde(app.nde);
@@ -464,34 +452,84 @@ export default function QuoteForm() {
     });
   };
 
-  /* ------------------------------ MATERIALS (catalog) ------------------------------ */
+  /* ------------------------------ MATERIALS (catalog) - FIXED VERSION ------------------------------ */
   const [materialOptions, setMaterialOptions] = useState([]);
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/materials`);
+        setLoading(true);
+        
+        // Fetch ALL materials with increased limit to get all 1,000+ materials
+        const res = await fetch(`${API_BASE}/api/materials?limit=2000`);
+        
         // Read raw text first to handle HTML or non-JSON responses
         const text = await res.text();
-        let rows;
+        let apiMaterials;
         try {
-          rows = text ? JSON.parse(text) : [];
+          apiMaterials = text ? JSON.parse(text) : [];
         } catch (e) {
+          console.error('Failed to parse materials API response:', e);
           throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
         }
-        let base = (rows || []).map(toMatOption).map(augmentOption);
-        base = mergeUniqueByValue(base, buildPlateOptions());
-        base = mergeUniqueByValue(base, buildSheetOptions());
-        base = base.map(augmentOption);
-        setMaterialOptions(base);
-      } catch {
-        let base = [];
-        base = mergeUniqueByValue(base, buildPlateOptions());
-        base = mergeUniqueByValue(base, buildSheetOptions());
-        base = base.map(augmentOption);
-        setMaterialOptions(base);
+
+        // Convert API materials to react-select format
+        let materialsList = [];
+        if (Array.isArray(apiMaterials)) {
+          materialsList = apiMaterials.map(material => {
+            // Convert database format to our standard format
+            return toMatOption({
+              type: material.type || material.category || material.family || 'Material',
+              category: material.category || material.type || material.family,
+              family: material.family || material.type || material.category,
+              size: material.size || material.description || '',
+              description: material.description || material.size || '',
+              weight_per_ft: material.weight_per_ft || material.weightPerFt,
+              weight_per_sqin: material.weight_per_sqin || material.weightPerSqin,
+              price_per_lb: material.price_per_lb || material.pricePerLb,
+              thicknessIn: material.thicknessIn || material.thickness_in,
+              density: material.density,
+              // Include all original properties
+              ...material
+            });
+          });
+        }
+
+        // Add our generated plates and sheets as fallback
+        materialsList = mergeUniqueByValue(materialsList, buildPlateOptions());
+        materialsList = mergeUniqueByValue(materialsList, buildSheetOptions());
+        
+        // Augment all options with calculated properties
+        materialsList = materialsList.map(augmentOption);
+        
+        console.log(`Loaded ${materialsList.length} materials from API + generated options`);
+        
+        // Group by family for easier debugging
+        const byFamily = {};
+        materialsList.forEach(m => {
+          const family = m.familyKey || m.type || 'Other';
+          if (!byFamily[family]) byFamily[family] = 0;
+          byFamily[family]++;
+        });
+        console.log('Materials by family:', byFamily);
+        
+        setMaterialOptions(materialsList);
+      } catch (error) {
+        console.error('Failed to load materials from API:', error);
+        
+        // Fallback to generated options only
+        let fallbackMaterials = [];
+        fallbackMaterials = mergeUniqueByValue(fallbackMaterials, buildPlateOptions());
+        fallbackMaterials = mergeUniqueByValue(fallbackMaterials, buildSheetOptions());
+        fallbackMaterials = fallbackMaterials.map(augmentOption);
+        
+        console.log(`Using ${fallbackMaterials.length} generated materials as fallback`);
+        setMaterialOptions(fallbackMaterials);
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
+
   /* --------------------------------- ROWS (BOM) --------------------------------- */
   const emptyRow = {
     itemNo: '',
@@ -724,7 +762,6 @@ export default function QuoteForm() {
     };
   }
 
-  // UPDATED to save full app state to _meta.json + DB
   async function handleSave(nextStatus = 'Draft', { goto = 'stay' } = {}) {
     if (saving) return;
 
@@ -736,7 +773,6 @@ export default function QuoteForm() {
     try {
       setSaving(true);
 
-      // Ensure a quote number exists quickly if we don't have one yet (create DB row)
       if (!meta.quoteNo?.trim() && status === 'draft') {
         const seed = buildPayloadFromMeta('Draft');
         const out = await saveQuoteAPI(seed);
@@ -791,7 +827,6 @@ export default function QuoteForm() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between', marginBottom: 6 }}>
             <h2 style={sectionTitle}>Step 1 — Quote Overview</h2>
             <div style={{ display: 'flex', gap: 8 }}>
-              {/* Quick Save buttons */}
               <button
                 style={button}
                 disabled={saving}
@@ -809,19 +844,28 @@ export default function QuoteForm() {
                 {saving ? 'Saving…' : 'Quick Finalize & Save'}
               </button>
 
-              {/* UPDATED: uploads to the quote's /uploads subfolder */}
               <UploadButton
                 quoteNo={meta.quoteNo || routeQuoteNo || ''}
                 subdir="uploads"
                 onUploaded={(items) => {
-                  // items: [{ originalname, size, subdir, path, url }]
                   setUploads(prev => [...items, ...prev]);
                 }}
               />
             </div>
           </div>
 
-          {/* Uploaded files list (from the new API shape) */}
+          {loading && (
+            <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f0f9ff', border: '1px solid #7dd3fc', borderRadius: 8, color: '#0369a1' }}>
+              Loading materials catalog from database...
+            </div>
+          )}
+
+          {!loading && materialOptions.length > 0 && (
+            <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, color: '#166534' }}>
+              ✅ Loaded {materialOptions.length} materials from catalog
+            </div>
+          )}
+
           {uploads.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Uploaded:</div>
@@ -847,7 +891,6 @@ export default function QuoteForm() {
                     >
                       {u.originalname}
                     </a>
-                    {/* Local-only remove from the temporary list (does not delete file) */}
                     <button
                       type="button"
                       onClick={() => setUploads(prev => prev.filter((_, i) => i !== idx))}
@@ -1015,6 +1058,8 @@ export default function QuoteForm() {
                           onChange={(sel)=>onMaterialSelect(i, sel)}
                           isSearchable
                           filterOption={filterOption}
+                          placeholder="Select material..."
+                          noOptionsMessage={() => loading ? "Loading materials..." : "No materials found"}
                         />
                       </div>
                       <button style={button} title="AI material search for bearings/hardware/etc. (placeholder)">AI</button>
@@ -1055,7 +1100,7 @@ export default function QuoteForm() {
                       && r.grade
                       && !r.grade.replace('__CUSTOM__:', '').toUpperCase().startsWith('SA-')) && (
                       <div style={{ color:'#b00020', marginTop:6, fontSize:12 }}>
-                        ASME selected: Grade should be “SA-*”. Please confirm or adjust.
+                        ASME selected: Grade should be "SA-*". Please confirm or adjust.
                       </div>
                     )}
                   </div>
@@ -1112,7 +1157,8 @@ export default function QuoteForm() {
                         </div>
                         <div>
                           <div style={label}>Price per Lb ($/lb) (fallback)</div>
-                          <input style={input} value={r.pricePerLb} onChange={e=>setRow(i,{ pricePerLb:e.target.value })} />
+                          <input
+                          style={input} value={r.pricePerLb} onChange={e=>setRow(i,{ pricePerLb:e.target.value })} />
                         </div>
                         <div />
                       </div>

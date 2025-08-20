@@ -12,7 +12,7 @@ const API_BASE =
 export async function uploadOne(file) {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch(`${API_BASE}/api/upload`, {
+  const res = await fetch(`/api/upload`, {
     method: "POST",
     body: fd,
   });

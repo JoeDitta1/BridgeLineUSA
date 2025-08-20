@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+const API_BASE = "";
 
 export default function QuoteFiles() {
   const { quoteNo } = useParams();
@@ -13,7 +13,7 @@ export default function QuoteFiles() {
   async function load() {
     try {
       setErr(''); setBusy(true);
-      const r = await fetch(`${API_BASE}/api/quote-files/${encodeURIComponent(quoteNo)}/files`);
+      const r = await fetch(`/api/quote-files/${encodeURIComponent(quoteNo)}/files`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
       setRows(Array.isArray(j) ? j : []);
@@ -29,7 +29,7 @@ export default function QuoteFiles() {
     for (const file of f) form.append('files', file);
     setBusy(true);
     try {
-      const r = await fetch(`${API_BASE}/api/quote-files/${encodeURIComponent(quoteNo)}/files`, {
+      const r = await fetch(`/api/quote-files/${encodeURIComponent(quoteNo)}/files`, {
         method: 'POST', body: form
       });
       if (!r.ok) throw new Error(`Upload failed ${r.status}`);
@@ -40,7 +40,7 @@ export default function QuoteFiles() {
 
   async function del(name) {
     if (!window.confirm(`Delete ${name}?`)) return;
-    const r = await fetch(`${API_BASE}/api/quote-files/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    const r = await fetch(`/api/quote-files/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(name)}`, { method: 'DELETE' });
     if (r.ok) load(); else alert('Delete failed');
   }
 
@@ -67,7 +67,7 @@ export default function QuoteFiles() {
         <tbody>
           {rows.map(r=>(
             <tr key={r.name}>
-              <td style={td}><a href={`${API_BASE}/api/quote-files/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(r.name)}`} target="_blank" rel="noreferrer">{r.name}</a></td>
+              <td style={td}><a href={`/api/quote-files/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(r.name)}`} target="_blank" rel="noreferrer">{r.name}</a></td>
               <td style={td}>{(r.size/1024).toFixed(1)} KB</td>
               <td style={td}>{new Date(r.modifiedAt).toLocaleString()}</td>
               <td style={tdRight}>

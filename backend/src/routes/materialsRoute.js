@@ -5,7 +5,7 @@ const router = express.Router();
 
 /**
  * GET /api/materials/families
- * Returns list of distinct material families
+ * Returns list of distinct material families (e.g., Plate, Angle, Tube, etc.)
  */
 router.get('/families', (req, res) => {
   try {
@@ -19,6 +19,7 @@ router.get('/families', (req, res) => {
 
 /**
  * GET /api/materials/sizes?family=Plate
+ * Returns list of sizes for a given family.
  */
 router.get('/sizes', (req, res) => {
   try {
@@ -33,16 +34,21 @@ router.get('/sizes', (req, res) => {
 });
 
 /**
- * GET /api/materials?family=Plate&q=2x2&limit=100
+ * GET /api/materials
+ * Optional query params:
+ *   - family=Plate
+ *   - q=2x2  (substring match against size/description/grade)
+ *   - limit=100 (default 100, max 1000)
  */
 router.get('/', (req, res) => {
   try {
     const { family, q } = req.query;
-    const limit = Math.max(1, Math.min(parseInt(req.query.limit || '100', 10), 1000));
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit || '100', 10), 2000)); // Increased to 2000
 
     let sql = `
-      SELECT id, family, size, unit_type, grade,
-             price_per_lb, price_per_ft, price_each, description
+      SELECT id, family as type, family, size, unit_type, grade,
+             price_per_lb, price_per_ft, price_each, description,
+             family as category
       FROM materials
     `;
     const where = [];
@@ -50,15 +56,17 @@ router.get('/', (req, res) => {
 
     if (family) { where.push('family = ?'); params.push(family); }
     if (q) {
-      where.push(`(size LIKE ? OR IFNULL(description,'') LIKE ? OR IFNULL(grade,'') LIKE ?)`);
-      params.push(\`%\${q}%\`, \`%\${q}%\`, \`%\${q}%\`);
+      where.push('(size LIKE ? OR IFNULL(description, \'\') LIKE ? OR IFNULL(grade, \'\') LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
     }
     if (where.length) sql += ' WHERE ' + where.join(' AND ');
     sql += ' ORDER BY family, size LIMIT ?';
     params.push(limit);
 
     const rows = db.prepare(sql).all(...params);
-    res.json({ ok: true, materials: rows });
+    
+    // Return just the array, not wrapped in an object
+    res.json(rows);
   } catch (e) {
     console.error('[materials:list] error:', e);
     res.status(500).json({ ok: false, error: 'Failed to fetch materials' });

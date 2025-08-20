@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+const API_BASE = "";
 
 const columns = [
   { key: 'quote_no', label: 'Quote No.' },
@@ -33,7 +33,7 @@ export default function QuoteLog() {
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_BASE}/api/quotes`);
+        const res = await fetch(`/api/quotes`);
         const data = await res.json();
         if (!alive) return;
         if (!data.ok) throw new Error(data.error || 'Failed to load');

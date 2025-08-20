@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BridgeLineUSA - Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-navy: #1e3a5f;
+            --primary-teal: #00a884;
+            --light-gray: #f5f7fa;
+            --medium-gray: #e2e8f0;
+            --dark-gray: #64748b;
+            --white: #ffffff;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, var(--light-gray) 0%, #ffffff 100%);
+            min-height: 100vh;
+            color: var(--primary-navy);
+        }
+
+        /* Header */
+        .header {
+            background: var(--white);
+            border-bottom: 2px solid var(--medium-gray);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo {
+            width: 50px;
+            height: 50px;
+            background: var(--primary-navy);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .logo::before {
+            content: 'BL';
+            color: var(--white);
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .logo::after {
+            content: '✓';
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            background: var(--primary-teal);
+            color: var(--white);
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            border: 2px solid var(--white);
+        }
+
+        .company-info h1 {
+            font-size: 1.5rem;
+            color: var(--primary-navy);
+            margin-bottom: 0.25rem;
+        }
+
+        .tagline {
+            color: var(--dark-gray);
+            font-size: 0.875rem;
+        }
+
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .ai-quick-btn {
+            background: linear-gradient(135deg, #ec4899, #be185d);
+            color: var(--white);
+            border: none;
+            padding: 0.75rem 1rem;
+            border-radius: 50px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            box-shadow: 0 2px 4px rgba(236, 72, 153, 0.3);
+        }
+
+        .ai-quick-btn:hover {
+            background: linear-gradient(135deg, #be185d, #9d174d);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(236, 72, 153, 0.4);
+        }
+
+        .user-info {
+            text-align: right;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: var(--primary-navy);
+        }
+
+        .user-role {
+            font-size: 0.875rem;
+            color: var(--dark-gray);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-teal);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--white);
+            font-weight: bold;
+        }
+
+        /* Main Content */
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .welcome-section {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border-left: 4px solid var(--primary-teal);
+        }
+
+        .welcome-section h2 {
+            color: var(--primary-navy);
+            margin-bottom: 0.5rem;
+            font-size: 1.5rem;
+        }
+
+        .welcome-section p {
+            color: var(--dark-gray);
+            margin-bottom: 1rem;
+        }
+
+        /* Announcements */
+        .announcement {
+            background: linear-gradient(135deg, var(--primary-navy), #2563eb);
+            color: var(--white);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .announcement-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Navigation Grid */
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-card {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 2px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--primary-teal);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .nav-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border-color: var(--primary-teal);
+        }
+
+        .nav-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            font-size: 24px;
+            color: var(--white);
+        }
+
+        .quotes .card-icon { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+        .jobs .card-icon { background: linear-gradient(135deg, var(--primary-teal), #059669); }
+        .production .card-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .quality .card-icon { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+        .cnc .card-icon { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .shipping .card-icon { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+        .equipment .card-icon { background: linear-gradient(135deg, #64748b, #475569); }
+        .ai-assistant .card-icon { background: linear-gradient(135deg, #ec4899, #be185d); }
+        .admin .card-icon { background: linear-gradient(135deg, var(--primary-navy), #1e40af); }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-navy);
+            margin-bottom: 0.5rem;
+        }
+
+        .card-description {
+            color: var(--dark-gray);
+            font-size: 0.875rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+
+        .card-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1rem;
+            border-top: 1px solid var(--medium-gray);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: var(--primary-navy);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--dark-gray);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .quick-actions h3 {
+            color: var(--primary-navy);
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            background: var(--primary-teal);
+            color: var(--white);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .action-btn:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .action-btn.secondary {
+            background: var(--medium-gray);
+            color: var(--primary-navy);
+        }
+
+        .action-btn.secondary:hover {
+            background: var(--dark-gray);
+            color: var(--white);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .main-content {
+                padding: 1rem;
+            }
+
+            .nav-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo-section">
+            <div class="logo"></div>
+            <div class="company-info">
+                <h1>BridgeLineUSA</h1>
+                <div class="tagline">AI-Assisted Manufacturing Platform</div>
+            </div>
+        </div>
+        <div class="user-section">
+            <button class="ai-quick-btn" onclick="quickAI()">
+                🤖 Ask AI
+            </button>
+            <div class="user-info">
+                <div class="user-name">Admin User</div>
+                <div class="user-role">System Administrator</div>
+            </div>
+            <div class="user-avatar">AU</div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <section class="welcome-section">
+            <h2>Welcome to BridgeLineUSA Dashboard</h2>
+            <p>Your comprehensive manufacturing operations platform. Navigate through the modules below to manage quotes, track jobs, monitor production, and maintain quality standards.</p>
+        </section>
+
+        <section class="nav-grid">
+            <div class="nav-card quotes" onclick="navigateTo('quotes')">
+                <div class="card-icon">💼</div>
+                <div class="card-title">Quotes</div>
+                <div class="card-description">Manage customer quotes, pricing, and proposals. AI-assisted quote generation and material calculations.</div>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-number">24</div>
+                        <div class="stat-label">Active</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">12</div>
+                        <div class="stat-label">Pending</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">8</div>
+                        <div class="stat-label">This Week</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-card jobs" onclick="navigateTo('jobs')">
+                <div class="card-icon">🏗️</div>
+                <div class="card-title">Jobs</div>
+                <div class="card-description">Track active jobs, monitor progress, and manage task assignments with real-time efficiency scoring.</div>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-number">16</div>
+                        <div class="stat-label">Active</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">5</div>
+                        <div class="stat-label">Behind</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">92%</div>
+                        <div class="stat-label">On Time</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-card production" onclick="navigateTo('production')">
+                <div class="card-icon">⚙️</div>
+                <div class="card-title">Production</div>
+                <div class="card-description">Monitor shop floor operations, resource planning, and detailed production instructions with time tracking.</div>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-number">8</div>
+                        <div class="stat-label">Running</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">3</div>
+                        <div class="stat-label">Queued</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">85%</div>
+                        <div class="stat-label">Efficiency</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-card quality" onclick="navigateTo('quality')">
+                <div class="card-icon">✅</div>
+                <div class="card-title">Quality Control</div>
+                <div class="card-description">Digital quality forms, compliance tracking, inspection management, and automated documentation.</div>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-number">15</div>
+                        <div class="stat-label">Inspections</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">2</div>
+                        <div class="stat-label">Issues</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">98.5%</div>
+                        <div class="stat-label">Pass Rate</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-card cnc" onclick="navigateTo('cnc')">
+                <div class="card-icon">🔧</div>
+                <div class="card-title">CNC Operations</div>
+                <div class="card-description">Bodor laser tracking, machine scheduling, operator assignments, and equipment maintenance logs.</div>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-number">4</div>
+                        <div class="stat-label">Machines</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">6.2</div>
+                        <div class="stat-label">Avg Hours</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">1</div>
+                        <div class="stat-label">Maintenance</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-card shipping" onclick="navigateTo('shipping')">
+                <div class="card-icon">📦</div>
+                <div class="card-title">Shipping</div>
+                <div class="card-description">Manage shipments, tracking, and delivery schedules. Monitor equipment shutdowns and maintenance windows.</div>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-number">7</div>
+                        <div class="stat-label">In Transit</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">12</div>
+                        <div class="stat-label">Ready</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">2</div>
+                        <div class="stat-label">Delayed</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-card equipment" onclick="navigateTo('equipment')">
+                <div class="card-icon">🏭</div>
+                <div class="card-title">Equipment</div>
+                <div class="card-description">Equipment maintenance scheduling, shutdown planning, and operational status monitoring across all shop floor assets.</div>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-number">18</div>
+                        <div class="stat-label">Active</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">2</div>
+                        <div class="stat-label">Maintenance</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">96%</div>
+                        <div class="stat-label">Uptime</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-card ai-assistant" onclick="navigateTo('ai-assistant')">
+                <div class="card-icon">🤖</div>
+                <div class="card-title">AI Assistant</div>
+                <div class="card-description">Advanced AI analysis, document review, automated quoting assistance, and intelligent insights for manufacturing operations.</div>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-number">47</div>
+                        <div class="stat-label">Queries Today</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">12</div>
+                        <div class="stat-label">Files Analyzed</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">95%</div>
+                        <div class="stat-label">Accuracy</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-card admin" onclick="navigateTo('admin')">
+                <div class="card-icon">👤</div>
+                <div class="card-title">Admin Portal</div>
+                <div class="card-description">User management, system settings, data archival, and advanced configuration options.</div>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-number">12</div>
+                        <div class="stat-label">Users</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">3</div>
+                        <div class="stat-label">Roles</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">99.9%</div>
+                        <div class="stat-label">Uptime</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="quick-actions">
+            <h3>Quick Actions</h3>
+            <div class="action-buttons">
+                <button class="action-btn" onclick="quickAction('new-quote')">
+                    ➕ New Quote
+                </button>
+                <button class="action-btn" onclick="quickAction('create-job')">
+                    🏗️ Create Job
+                </button>
+                <button class="action-btn" onclick="quickAction('ai-analyze')">
+                    🤖 AI Analysis
+                </button>
+                <button class="action-btn secondary" onclick="quickAction('reports')">
+                    📊 View Reports
+                </button>
+                <button class="action-btn secondary" onclick="quickAction('search')">
+                    🔍 Search Files
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function quickAI() {
+            console.log('Quick AI assistant activated');
+            alert('AI Assistant: How can I help you today?\n\n• Analyze drawings or documents\n• Help with quote calculations\n• Review project requirements\n• Answer manufacturing questions');
+        }
+
+        function navigateTo(module) {
+            console.log(`Navigating to ${module} module`);
+            // This is where you'll add navigation logic to other modules
+            alert(`${module.charAt(0).toUpperCase() + module.slice(1)} module - Coming soon!`);
+        }
+
+        function quickAction(action) {
+            console.log(`Quick action: ${action}`);
+            switch(action) {
+                case 'new-quote':
+                    alert('Opening New Quote form...');
+                    break;
+                case 'create-job':
+                    alert('Opening Job Creation wizard...');
+                    break;
+                case 'ai-analyze':
+                    alert('AI Analysis: Upload files for intelligent document review and insights');
+                    break;
+                case 'reports':
+                    alert('Loading Reports dashboard...');
+                    break;
+                case 'search':
+                    alert('Opening File Search...');
+                    break;
+                default:
+                    alert('Action not implemented yet');
+            }
+        }
+
+        // Simulate real-time updates
+        function updateStats() {
+            // This would connect to your backend for real-time data
+            console.log('Stats updated');
+        }
+
+        // Update stats every 30 seconds
+        setInterval(updateStats, 30000);
+    </script>
+</body>
+</html>

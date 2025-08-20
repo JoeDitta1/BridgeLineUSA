@@ -1,4 +1,3 @@
-
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
@@ -7,18 +6,22 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Cross-platform data dir inside the repo (works on Windows + Codespaces)
 const DATA_DIR = process.env.SCM_DATA_DIR || path.join(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'app.db');     // ← only one of these
-console.log('[DB] Using database at:', DB_PATH);   // ← the log line
-
-
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
+const DB_PATH = path.join(DATA_DIR, 'app.db');
+console.log('[DB] Using database at:', DB_PATH);
+
+// Open DB
 export const db = new Database(DB_PATH);
 
+// Create all needed tables
 export function migrate() {
   db.exec(`
     PRAGMA journal_mode = WAL;
+
+    /* materials */
     CREATE TABLE IF NOT EXISTS materials (
       id INTEGER PRIMARY KEY,
       family TEXT NOT NULL,
@@ -41,6 +44,7 @@ export function migrate() {
       FOREIGN KEY(material_id) REFERENCES materials(id)
     );
 
+    /* parts, price history (unchanged) */
     CREATE TABLE IF NOT EXISTS parts (
       id INTEGER PRIMARY KEY,
       part_no TEXT NOT NULL UNIQUE,
@@ -58,5 +62,23 @@ export function migrate() {
       updated_at INTEGER NOT NULL,
       UNIQUE(material_key, unit_type, grade, domestic)
     );
+
+    /* quotes */
+    CREATE TABLE IF NOT EXISTS quotes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      quote_no TEXT NOT NULL,
+      customer_name TEXT NOT NULL,
+      description TEXT,
+      requested_by TEXT,
+      estimator TEXT,
+      date TEXT NOT NULL,                 -- YYYY-MM-DD
+      status TEXT DEFAULT 'Draft',
+      sales_order_no TEXT,
+      rev INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_quotes_date ON quotes(date DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_quote_no_rev ON quotes(quote_no, rev);
   `);
 }

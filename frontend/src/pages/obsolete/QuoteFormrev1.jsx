@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import Select from 'react-select';
 import UploadButton from '../components/UploadButton';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+const API_BASE = "";
 
 /* --------------------------------- Helpers --------------------------------- */
 
@@ -376,7 +376,7 @@ const removeUpload = (fileName) => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/materials`);
+        const res = await fetch(`/api/materials`);
         const rows = await res.json();
         let base = (rows || []).map(toMatOption).map(augmentOption);
         base = mergeUniqueByValue(base, buildPlateOptions());
