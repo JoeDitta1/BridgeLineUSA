@@ -244,7 +244,6 @@ const wpfFromArea = (areaIn2, density=DENSITY_STEEL) => {
   if (!areaIn2 || areaIn2<=0) return 0;
   return Number((areaIn2 * 12 * density).toFixed(4));
 };
-
 /* -------------------------- Weight inference -------------------------- */
 const inferWeightPerFt = (opt) => {
   const fam = normalizeFamily(opt.type || opt.family || opt.category || '');
@@ -294,7 +293,7 @@ const augmentOption = (o) => {
   return out;
 };
 
-/* ======================= NEW: Save helpers for backend ======================= */
+/* ======================= Save helpers for backend ======================= */
 async function saveQuoteAPI(payload) {
   const res = await fetch(`${API_BASE}/api/quotes`, {
     method: 'POST',
@@ -311,12 +310,9 @@ async function saveQuoteAPI(payload) {
       rev: Number.isFinite(payload.rev) ? payload.rev : 0
     }),
   });
-  // Read raw text first; handle cases where server may return HTML or non-JSON
   const text = await res.text();
   let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch (e) {
+  try { data = text ? JSON.parse(text) : {}; } catch (e) {
     throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
   }
   if (!res.ok || data.ok === false) {
@@ -343,16 +339,12 @@ async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  // Read raw text first; handle cases where server may return HTML or non-JSON
   const text = await res.text();
-  // If the endpoint does not exist (404), treat as success and skip JSON parsing
   if (res.status === 404) {
     return { ok: true, skipped: true };
   }
   let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch (e) {
+  try { data = text ? JSON.parse(text) : {}; } catch (e) {
     throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
   }
   if (!res.ok || data.ok === false) {
@@ -360,6 +352,27 @@ async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
   }
   return data; // { ok, quoteNo, customerName, metaPath, quoteDir }
 }
+
+/** NEW: Initialize folder tree (idempotent). */
+async function initFoldersAPI({ quote_no, customer_name, description }) {
+  const url = `${API_BASE}/api/quotes/${encodeURIComponent(quote_no)}/init-folders`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customer_name, quote_no, description }),
+  });
+  const text = await res.text();
+  if (res.status === 404) return { ok: true, skipped: true }; // backend not implemented yet—safe to ignore
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch (e) {
+    throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
+  }
+  if (!res.ok || data.ok === false) {
+    throw new Error(data?.detail || data?.error || `Init folders failed (${res.status})`);
+  }
+  return data;
+}
+
 /* ================================== App ================================== */
 export default function QuoteForm() {
   const location = useLocation();
@@ -413,12 +426,9 @@ export default function QuoteForm() {
       if (!routeQuoteNo) return;
       try {
         const resp = await fetch(`${API_BASE}/api/quotes/${encodeURIComponent(routeQuoteNo)}/meta`);
-        // Read raw text first; handle cases where server may return HTML (e.g. dev server 404)
         const text = await resp.text();
         let json;
-        try {
-          json = text ? JSON.parse(text) : {};
-        } catch (e) {
+        try { json = text ? JSON.parse(text) : {}; } catch (e) {
           throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
         }
         if (!resp.ok || json.ok === false) throw new Error(json.error || 'Failed to load quote meta');
@@ -427,7 +437,6 @@ export default function QuoteForm() {
         const app = form.appState || {};
         if (!active) return;
 
-        // merge in saved app state
         if (app.meta) setMeta(prev => ({ ...prev, ...app.meta, quoteNo: routeQuoteNo }));
         if (Array.isArray(app.rows)) setRows(app.rows.map(r => ({ _uiOpen: true, _uiMarkupPct: r._uiMarkupPct || '', ...r })));
         if (Array.isArray(app.nde)) setNde(app.nde);
@@ -470,12 +479,9 @@ export default function QuoteForm() {
     (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/materials`);
-        // Read raw text first to handle HTML or non-JSON responses
         const text = await res.text();
         let rows;
-        try {
-          rows = text ? JSON.parse(text) : [];
-        } catch (e) {
+        try { rows = text ? JSON.parse(text) : []; } catch (e) {
           throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
         }
         let base = (rows || []).map(toMatOption).map(augmentOption);
@@ -724,7 +730,7 @@ export default function QuoteForm() {
     };
   }
 
-  // UPDATED to save full app state to _meta.json + DB
+  // UPDATED: save full app state + ensure quote record + init folders (no layout changes)
   async function handleSave(nextStatus = 'Draft', { goto = 'stay' } = {}) {
     if (saving) return;
 
@@ -736,21 +742,38 @@ export default function QuoteForm() {
     try {
       setSaving(true);
 
-      // Ensure a quote number exists quickly if we don't have one yet (create DB row)
-      if (!meta.quoteNo?.trim() && status === 'draft') {
-        const seed = buildPayloadFromMeta('Draft');
+      // Ensure a quote number exists (create DB row) for BOTH draft and final
+      if (!meta.quoteNo?.trim()) {
+        const seed = buildPayloadFromMeta(status === 'final' ? 'Submitted' : 'Draft');
         const out = await saveQuoteAPI(seed);
-        setMeta(m => ({ ...m, quoteNo: out.quote_no }));
+        if (out?.quote_no) {
+          setMeta(m => ({ ...m, quoteNo: out.quote_no }));
+        }
       }
 
-      const result = await saveQuoteMetaAPI({ meta, rows, nde }, status);
+      // Save meta/app state
+      const result = await saveQuoteMetaAPI({ meta: { ...meta, quoteNo: (meta.quoteNo || '').trim() }, rows, nde }, status);
       const savedQuoteNo = result.quoteNo || result.quote_no || meta.quoteNo || routeQuoteNo || '';
 
       if (savedQuoteNo && savedQuoteNo !== meta.quoteNo) {
         setMeta(m => ({ ...m, quoteNo: savedQuoteNo }));
       }
 
-      if (goto === 'files') {
+      // Initialize folder tree (idempotent on server). Safe to ignore if not implemented.
+      if (savedQuoteNo) {
+        try {
+          await initFoldersAPI({
+            quote_no: savedQuoteNo,
+            customer_name: (meta.customerName || '').trim(),
+            description: (meta.description || '').trim() || ''
+          });
+        } catch (e) {
+          console.warn('Folder init warning:', e);
+        }
+      }
+
+      // Navigate
+      if (goto === 'files' && savedQuoteNo) {
         navigate(`/quotes/${encodeURIComponent(savedQuoteNo)}/files`);
       } else if (goto === 'log') {
         navigate('/quotes');
@@ -821,7 +844,7 @@ export default function QuoteForm() {
             </div>
           </div>
 
-          {/* Uploaded files list (from the new API shape) */}
+          {/* Uploaded files list */}
           {uploads.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Uploaded:</div>
@@ -847,7 +870,6 @@ export default function QuoteForm() {
                     >
                       {u.originalname}
                     </a>
-                    {/* Local-only remove from the temporary list (does not delete file) */}
                     <button
                       type="button"
                       onClick={() => setUploads(prev => prev.filter((_, i) => i !== idx))}
@@ -960,8 +982,7 @@ export default function QuoteForm() {
               <button style={button} onClick={addRow}>+ Add Item</button>
             </div>
           </div>
-
-          {(ndeSuggested.length>0) && (
+ {(ndeSuggested.length>0) && (
             <div style={{ background:'#eef7ff', border:'1px solid #b6ddff', padding:10, borderRadius:8 }}>
               <strong>Suggestion:</strong> Based on Quality and materials, consider {ndeSuggested.join(' + ')}.
               <div style={{ marginTop: 6, display:'flex', gap:8, flexWrap:'wrap' }}>

@@ -6,7 +6,7 @@ import path from "path";
 const router = express.Router();
 
 // Your materials.json lives one level up from the Part2 folder
-const JSON_PATH = path.resolve(process.cwd(), "..", "materials.json");
+const JSON_PATH = path.resolve(process.cwd(), "..", "frontend", "src", "data", "materials.json");
 
 /** ---------- helpers (non-breaking enrich) ---------- **/
 
@@ -71,23 +71,33 @@ function enrichMaterialRow(row) {
 /** ---------- route (same path & behavior) ---------- **/
 
 router.get("/", (_req, res) => {
+  console.log("=== MATERIALS ROUTE HIT ===");
+  console.log("Looking for file at:", JSON_PATH);
+  
   try {
+    console.log("Attempting to read file...");
     const text = fs.readFileSync(JSON_PATH, "utf8");
+    console.log("File read successfully, length:", text.length);
+    
     const data = JSON.parse(text);
-    // Accept either a plain array or { materials: [...] }
+    console.log("JSON parsed successfully");
+    
     const list = Array.isArray(data)
       ? data
       : Array.isArray(data?.materials)
       ? data.materials
       : [];
 
-    // Enrich rows without changing original fields
+    console.log("Final list length:", list.length);
+    
     const enriched = list.map(enrichMaterialRow);
-
+    console.log("Sending", enriched.length, "materials");
+    
     res.json(enriched);
   } catch (e) {
-    console.error("materials.json read error:", e.message);
-    res.json([]); // client will still show Plate/Sheet fallbacks
+    console.error("ERROR in materials route:", e.message);
+    console.error("Full error:", e);
+    res.json([]);
   }
 });
 

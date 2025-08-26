@@ -14,6 +14,19 @@ const db = dbModule.default ?? dbModule.db ?? dbModule;
 
 const router = express.Router();
 
+/* --------------------------------- Paths ---------------------------------- */
+/**
+ * Resolve the quote vault root. We support either QUOTE_VAULT_ROOT or QUOTE_ROOT.
+ * Relative paths are resolved against the backend folder so Codespaces/Linux works.
+ */
+const resolveFromBackend = (p) =>
+  path.isAbsolute(p) ? p : path.resolve(__dirname, '..', p);
+
+// default to ./data/quotes inside backend if nothing set
+const VAULT_ROOT = resolveFromBackend(
+  process.env.QUOTE_VAULT_ROOT || process.env.QUOTE_ROOT || './data/quotes'
+);
+
 /* ----------------------------- Helper functions ---------------------------- */
 // Accepts YYYY-MM-DD or MM/DD/YYYY; outputs YYYY-MM-DD
 function toISO(d) {
@@ -26,13 +39,38 @@ function toISO(d) {
   return null;
 }
 
-// Sanitize for Windows folder names
-const safe = (s = '') => String(s).replace(/[^a-z0-9\-_]/gi, '_').slice(0, 120);
+// File/dir helpers
+const slug = (s = '') =>
+  String(s)
+    .normalize('NFKD')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .toLowerCase();
+
+async function ensureDir(p) {
+  await fsPromises.mkdir(p, { recursive: true });
+}
+
+async function listDirs(p) {
+  try {
+    const entries = await fsPromises.readdir(p, { withFileTypes: true });
+    return entries.filter((e) => e.isDirectory()).map((d) => d.name);
+  } catch {
+    return [];
+  }
+}
 
 // Pull next quote number from settings and increment sequence
 function getNextQuoteNo() {
-  const s = db.prepare('SELECT org_prefix, system_abbr, quote_series, quote_pad, next_quote_seq FROM settings WHERE id=1').get();
+  const s = db
+    .prepare(
+      'SELECT org_prefix, system_abbr, quote_series, quote_pad, next_quote_seq FROM settings WHERE id=1'
+    )
+    .get();
   if (!s) throw new Error('Settings row missing (id=1).');
+
   const seq = Number(s.next_quote_seq) || 1;
   const padded = String(seq).padStart(Number(s.quote_pad) || 4, '0');
   const parts = [s.org_prefix, s.system_abbr, `${s.quote_series}${padded}`].filter(Boolean);
@@ -42,17 +80,55 @@ function getNextQuoteNo() {
   return quoteNo;
 }
 
-// Create folder structure for a given quote number (non-fatal errors)
-async function createQuoteFolders(quoteNo) {
-  const base =
-    process.env.QUOTE_ROOT ||
-    path.resolve(__dirname, '../..', 'data', 'quotes'); // fallback in repo
+/**
+ * Create customer + quote folder tree with automatic revisioning.
+ * Returns { customerDir, quoteDir, folderName, revision }.
+ */
+async function createCustomerQuoteFolders({ customerName, quoteNo, description }) {
+  const customerSafe = slug(customerName) || 'unknown';
+  const baseName = `${quoteNo}-${slug(description || '')}`.replace(/-$/, '');
+  const customerDir = path.join(VAULT_ROOT, customerSafe);
+  await ensureDir(customerDir);
 
-  const root = path.join(base, safe(quoteNo));
-  await fsPromises.mkdir(path.join(root, 'Files'), { recursive: true });
-  await fsPromises.mkdir(path.join(root, 'Quote'), { recursive: true });
-  await fsPromises.mkdir(path.join(root, 'Supplier Information'), { recursive: true });
-  return root;
+  // determine revision by existing folder names
+  const dirs = await listDirs(customerDir);
+  const matches = dirs.filter((d) => d === baseName || d.startsWith(`${baseName}-rev-`));
+
+  let rev = 1;
+  for (const d of matches) {
+    const m = d.match(/-rev-(\d+)$/i);
+    if (m) rev = Math.max(rev, Number(m[1]) + 1);
+    else rev = Math.max(rev, 2);
+  }
+
+  const folderName = rev > 1 ? `${baseName}-rev-${rev}` : baseName;
+  const quoteDir = path.join(customerDir, folderName);
+  await ensureDir(quoteDir);
+
+  // Desired subfolders
+  const subfolders = [
+    'Quote Form',
+    'Vendor Quotes',
+    'Drawings',
+    'Customer Info',
+    'Related Files',
+  ];
+  await Promise.all(subfolders.map((sf) => ensureDir(path.join(quoteDir, sf))));
+
+  return { customerDir, quoteDir, folderName, revision: rev };
+}
+
+/**
+ * Soft-archive a quote folder by moving it under _archived/.
+ */
+async function archiveCustomerQuoteFolder(customerName, folderName) {
+  const customerSafe = slug(customerName) || 'unknown';
+  const from = path.join(VAULT_ROOT, customerSafe, folderName);
+  const archivedRoot = path.join(VAULT_ROOT, customerSafe, '_archived');
+  await ensureDir(archivedRoot);
+  const to = path.join(archivedRoot, folderName);
+  await fsPromises.rename(from, to);
+  return { archivedPath: to };
 }
 
 /* ------------------------------ Routes: GET all ---------------------------- */
@@ -62,7 +138,7 @@ router.get('/', (req, res) => {
       .prepare(
         `
       SELECT id, quote_no, customer_name, description, requested_by, estimator, date,
-             status, sales_order_no, rev, created_at, updated_at
+             status, sales_order_no, rev, created_at
       FROM quotes
       ORDER BY date DESC, id DESC
     `
@@ -111,7 +187,23 @@ router.post('/', async (req, res) => {
     let finalQuoteNo = payload.quote_no;
     if (!finalQuoteNo) finalQuoteNo = getNextQuoteNo();
 
-    // Insert row
+    // Create folder structure first to know revision
+    let folderInfo = null;
+    try {
+      if (process.env.QUOTE_FOLDERS_DISABLED !== '1') {
+        folderInfo = await createCustomerQuoteFolders({
+          customerName: payload.customer_name,
+          quoteNo: finalQuoteNo,
+          description: payload.description || 'quote',
+        });
+        // use revision we computed
+        payload.rev = folderInfo.revision ?? 0;
+      }
+    } catch (folderErr) {
+      console.error('Folder creation warning:', folderErr);
+    }
+
+    // Insert DB row
     const stmt = db.prepare(
       `
       INSERT INTO quotes (quote_no, customer_name, description, requested_by, estimator, date, status, sales_order_no, rev)
@@ -127,7 +219,7 @@ router.post('/', async (req, res) => {
       payload.date,
       payload.status,
       payload.sales_order_no,
-      payload.rev
+      Number.isFinite(+payload.rev) ? +payload.rev : 0
     );
 
     // Fetch created
@@ -142,21 +234,25 @@ router.post('/', async (req, res) => {
       )
       .get(result.lastInsertRowid);
 
-    // Try to create folders; don't fail the whole request if it errors
-    try {
-      if (process.env.QUOTE_FOLDERS_DISABLED !== '1') {
-        await createQuoteFolders(created.quote_no);
-        return res.status(201).json({ ok: true, quote: created });
-      } else {
-        return res.status(201).json({ ok: true, quote: created, warning: 'Folder creation disabled by env' });
-      }
-    } catch (folderErr) {
-      console.error('Folder creation warning:', folderErr);
-      return res.status(201).json({ ok: true, quote: created, warning: 'Folder creation failed; see server logs.' });
+    const response = { ok: true, quote: created };
+    if (folderInfo) {
+      response.folder = {
+        customerDir: folderInfo.customerDir,
+        folderPath: folderInfo.quoteDir,
+        folderName: folderInfo.folderName,
+        revision: folderInfo.revision,
+      };
+    } else if (process.env.QUOTE_FOLDERS_DISABLED === '1') {
+      response.warning = 'Folder creation disabled by env';
+    } else {
+      response.warning = 'Folder creation failed; see server logs.';
     }
+    return res.status(201).json(response);
   } catch (err) {
     console.error('Error creating quote:', err);
-    res.status(500).json({ ok: false, error: 'Failed to create quote', detail: String(err?.message || err) });
+    res
+      .status(500)
+      .json({ ok: false, error: 'Failed to create quote', detail: String(err?.message || err) });
   }
 });
 
@@ -189,7 +285,7 @@ router.put('/:id', (req, res) => {
       payload.quote_no,
       payload.customer_name,
       payload.description,
-      payload.request_by,
+      payload.requested_by, // ← fix: was request_by
       payload.estimator,
       payload.date,
       payload.status,
@@ -202,18 +298,65 @@ router.put('/:id', (req, res) => {
     res.json({ ok: true, quote: updated });
   } catch (err) {
     console.error('Error updating quote:', err);
-    res.status(500).json({ ok: false, error: 'Failed to update quote', detail: String(err?.message || err) });
+    res
+      .status(500)
+      .json({ ok: false, error: 'Failed to update quote', detail: String(err?.message || err) });
   }
 });
 
 /* ------------------------------ Route: DELETE ------------------------------ */
+/**
+ * Hard delete (DB row). We keep this for now.
+ * For "remove from log but keep files", use the archive endpoint below.
+ */
 router.delete('/:id', (req, res) => {
   try {
     const info = db.prepare('DELETE FROM quotes WHERE id = ?').run(req.params.id);
     res.json({ ok: true, deleted: info.changes > 0 });
   } catch (err) {
     console.error('Error deleting quote:', err);
-    res.status(500).json({ ok: false, error: 'Failed to delete quote', detail: String(err?.message || err) });
+    res
+      .status(500)
+      .json({ ok: false, error: 'Failed to delete quote', detail: String(err?.message || err) });
+  }
+});
+
+/* ------------------------------ Route: ARCHIVE ----------------------------- */
+/**
+ * Soft-delete: move quote folder to _archived/ and mark DB status = 'Archived'.
+ * Body can be empty; we’ll compute folder name from DB row.
+ * Optionally you may POST { customer_name, folder_name } to override.
+ */
+router.post('/:id/archive', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const row = db.prepare('SELECT * FROM quotes WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ ok: false, error: 'Quote not found' });
+
+    const customerName = (req.body?.customer_name || row.customer_name || '').toString();
+    const baseName = `${row.quote_no}-${slug(row.description || '')}`.replace(/-$/, '');
+    const folderName = row.rev > 1 ? `${baseName}-rev-${row.rev}` : baseName;
+
+    // Try to move the folder; if it doesn't exist, we just continue
+    let archivedPath = null;
+    try {
+      const result = await archiveCustomerQuoteFolder(customerName, folderName);
+      archivedPath = result.archivedPath;
+    } catch (e) {
+      // log but don't fail — DB status archiving still applies
+      console.warn('Archive move warning:', e?.message || e);
+    }
+
+    // Mark DB row as Archived
+    db.prepare('UPDATE quotes SET status = ? WHERE id = ?').run('Archived', id);
+    const updated = db.prepare('SELECT * FROM quotes WHERE id = ?').get(id);
+
+    res.json({ ok: true, archivedPath, quote: updated });
+  } catch (err) {
+    console.error('Error archiving quote:', err);
+    res
+      .status(500)
+      .json({ ok: false, error: 'Failed to archive quote', detail: String(err?.message || err) });
   }
 });
 

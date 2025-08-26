@@ -24,6 +24,10 @@ const db = dbModule.default ?? dbModule.db ?? dbModule;
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+/* ---------------------------------- Trust --------------------------------- */
+// Helpful if you later use secure cookies behind Codespaces/NGINX, etc.
+app.set('trust proxy', 1);
+
 /* ------------------------------- Migrations ------------------------------- */
 db.exec?.(`
 CREATE TABLE IF NOT EXISTS quotes (
@@ -75,51 +79,81 @@ if (!srow) {
 }
 
 /* -------------------------------- Middleware ------------------------------ */
-app.use(
-  cors({
-    origin: [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/],
-    credentials: true,
-  })
-);
+// CORS that works with Codespaces
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (e.g., curl)
+    if (!origin) return callback(null, true);
+
+    // Allow any GitHub Codespaces domain
+    if (origin.includes('.app.github.dev')) {
+      return callback(null, true);
+    }
+
+    // Allow localhost for local development
+    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+      return callback(null, true);
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '5mb' }));
 
-/* --------------------------- File serving roots --------------------------- */
-// You can override these in backend/.env
-// DATA_ROOT is optional; QUOTE_ROOT/UPLOADS_DIR take precedence where used
-const DATA_ROOT = process.env.DATA_ROOT || path.resolve(__dirname, '../data');
+/* ------------------------ Resolve important directories ------------------- */
+/**
+ * Resolve relative paths against the backend folder so Linux/Codespaces works,
+ * while still honoring absolute paths if provided in .env.
+ */
+const BACKEND_ROOT = path.resolve(__dirname, '..');     // .../backend
+const MONO_ROOT = path.resolve(BACKEND_ROOT, '..');     // repo root
 
-// UPLOADS
-const UPLOADS_DIR =
-  process.env.UPLOADS_DIR || path.resolve(DATA_ROOT, 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
+const resolveFromBackend = (p) =>
+  path.isAbsolute(p) ? p : path.resolve(BACKEND_ROOT, p);
+
+// DATA_ROOT is optional; QUOTE_ROOT/UPLOADS_DIR take precedence where used
+const DATA_ROOT = resolveFromBackend(process.env.DATA_ROOT || './data');
+
+// UPLOADS (env wins; else ./uploads)
+const uploadsEnv = process.env.UPLOADS_DIR || './uploads';
+const UPLOADS_DIR = resolveFromBackend(uploadsEnv);
+await fsPromises.mkdir(UPLOADS_DIR, { recursive: true });
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// QUOTE FOLDERS (use QUOTE_ROOT from .env)
-const QUOTES_FILES_ROOT =
-  process.env.QUOTE_ROOT || path.resolve(DATA_ROOT, 'quotes');
-if (!fs.existsSync(QUOTES_FILES_ROOT)) {
-  fs.mkdirSync(QUOTES_FILES_ROOT, { recursive: true });
-}
+// QUOTE FOLDERS (support either QUOTE_VAULT_ROOT or QUOTE_ROOT; default ./data/quotes)
+const quoteEnv = (process.env.QUOTE_VAULT_ROOT || process.env.QUOTE_ROOT || './data/quotes');
+const QUOTES_FILES_ROOT = resolveFromBackend(quoteEnv);
+await fsPromises.mkdir(QUOTES_FILES_ROOT, { recursive: true });
 app.use('/files', express.static(QUOTES_FILES_ROOT));
+
+// Expose resolved paths to routes if needed
+app.locals.paths = {
+  uploadsDir: UPLOADS_DIR,
+  quotesRoot: QUOTES_FILES_ROOT,
+  dataRoot: DATA_ROOT
+};
 
 /* --------------------------------- Routes -------------------------------- */
 app.use('/api/upload', uploadRoute);
 app.use('/api/materials', materialsRoute);
 app.use('/api/quotes', quotesRoute);
+app.use('/api/settings', settingsRoute); // <— mounted (was imported but not used)
 
 // File routes mounted under /api/quotes to match frontend expectations
 app.use('/api/quotes', quoteFilesRoute);
 // Optional legacy mount
 app.use('/api/quote-files', quoteFilesRoute);
 
-// Health route
+/* --------------------------------- Health -------------------------------- */
 app.get('/api/health', (req, res) => {
   let version = 'unknown';
   try {
     const pkg = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')
+      fs.readFileSync(path.join(MONO_ROOT, 'package.json'), 'utf8')
     );
     version = pkg.version || version;
   } catch {}
@@ -128,20 +162,29 @@ app.get('/api/health', (req, res) => {
     service: 'SCM-AI API',
     version,
     time: new Date().toISOString(),
-    quoteRoot: QUOTES_FILES_ROOT,
-    uploadsDir: UPLOADS_DIR,
+    env: {
+      PORT: process.env.PORT,
+      QUOTE_ROOT: process.env.QUOTE_ROOT,
+      QUOTE_VAULT_ROOT: process.env.QUOTE_VAULT_ROOT,
+      UPLOADS_DIR: process.env.UPLOADS_DIR,
+      DATA_ROOT: process.env.DATA_ROOT
+    },
+    resolved: {
+      quoteRoot: QUOTES_FILES_ROOT,
+      uploadsDir: UPLOADS_DIR,
+      dataRoot: DATA_ROOT
+    }
   });
 });
 
 // Optional: folder smoke test to verify permissions/paths quickly
 app.get('/api/_test_folders', async (req, res) => {
   try {
-    const root = QUOTES_FILES_ROOT;
-    const testRoot = path.join(root, 'TEST');
+    const testRoot = path.join(QUOTES_FILES_ROOT, 'TEST');
     await fsPromises.mkdir(path.join(testRoot, 'Files'), { recursive: true });
     await fsPromises.mkdir(path.join(testRoot, 'Quote'), { recursive: true });
     await fsPromises.mkdir(path.join(testRoot, 'Supplier Information'), { recursive: true });
-    res.json({ ok: true, base: root });
+    res.json({ ok: true, base: QUOTES_FILES_ROOT });
   } catch (e) {
     console.error('Folder test failed:', e);
     res.status(500).json({ ok: false, error: String(e) });
@@ -150,12 +193,9 @@ app.get('/api/_test_folders', async (req, res) => {
 
 /* ------------------------- Static serve for production -------------------- */
 /**
- * Build:  cd ..\frontend && npm run build
- * Serve:  set SERVE_FRONTEND=true  (Windows) then start backend
+ * Build:  (from repo root) cd frontend && npm run build
+ * Serve:  set SERVE_FRONTEND=true then start backend
  */
-const BACKEND_ROOT = path.resolve(__dirname, '..');     // C:\SCM-AI\backend
-const MONO_ROOT = path.resolve(BACKEND_ROOT, '..');     // C:\SCM-AI
-
 const candidates = [
   path.resolve(MONO_ROOT, 'frontend', 'build'),
   path.resolve(MONO_ROOT, 'client', 'build'),
@@ -182,12 +222,12 @@ if (process.env.SERVE_FRONTEND === 'true' && FRONTEND_BUILD_DIR) {
 }
 
 /* ------------------------------- Root route ------------------------------- */
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.send('SCM-AI backend is running');
 });
 
 /* --------------------------------- Start --------------------------------- */
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   console.log(`Uploads: ${UPLOADS_DIR}`);
   console.log(`Quote folders: ${QUOTES_FILES_ROOT}`);
