@@ -62,7 +62,7 @@ router.get('/', (req, res) => {
       .prepare(
         `
       SELECT id, quote_no, customer_name, description, requested_by, estimator, date,
-             status, sales_order_no, rev, created_at, updated_at
+       status, sales_order_no, rev, created_at
       FROM quotes
       ORDER BY date DESC, id DESC
     `

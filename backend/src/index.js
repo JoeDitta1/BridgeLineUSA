@@ -75,12 +75,29 @@ if (!srow) {
 }
 
 /* -------------------------------- Middleware ------------------------------ */
-app.use(
-  cors({
-    origin: [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/],
-    credentials: true,
-  })
-);
+// CORS that works with Codespaces
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin
+    if (!origin) return callback(null, true);
+    
+    // Allow any GitHub Codespaces domain
+    if (origin.includes('.app.github.dev')) {
+      return callback(null, true);
+    }
+    
+    // Allow localhost for local development
+    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '5mb' }));
 
 /* --------------------------- File serving roots --------------------------- */
@@ -187,7 +204,7 @@ app.get('/', (req, res) => {
 });
 
 /* --------------------------------- Start --------------------------------- */
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   console.log(`Uploads: ${UPLOADS_DIR}`);
   console.log(`Quote folders: ${QUOTES_FILES_ROOT}`);
