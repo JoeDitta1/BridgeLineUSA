@@ -13,6 +13,8 @@ import materialsRoute from './materialsRoute.js';
 import quotesRoute from './routes/quotesRoute.js';
 import settingsRoute from './routes/settingsRoute.js';
 import * as dbModule from './db.js';
+import customersRoute from './routes/customersRoute.js';
+import quoteInitRoute from './routes/quoteInitRoute.js';
 
 /* ------------------------- ES module __dirname shim ------------------------ */
 const __filename = fileURLToPath(import.meta.url);
@@ -103,6 +105,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '5mb' }));
+app.use('/api/quotes', customersRoute);
 
 /* ------------------------ Resolve important directories ------------------- */
 /**
@@ -141,6 +144,7 @@ app.locals.paths = {
 app.use('/api/upload', uploadRoute);
 app.use('/api/materials', materialsRoute);
 app.use('/api/quotes', quotesRoute);
+app.use('/api/quotes', quoteInitRoute);
 app.use('/api/settings', settingsRoute); // <— mounted (was imported but not used)
 
 // File routes mounted under /api/quotes to match frontend expectations

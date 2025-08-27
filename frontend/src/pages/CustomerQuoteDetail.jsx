@@ -1,99 +1,125 @@
-import React, { useMemo } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
-import "./CustomerQuoteDetail.css";
+// frontend/src/pages/CustomerQuoteDetail.jsx
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 
-const SAMPLE_FOLDERS = [
-  { quoteNumber:"SCM-Q2025-0143", revision:2, description:"Steel Fabrication",  dateCreated:"2025-01-15", status:"active",    value:45230,  subfolders:["Quote Form","Vendor Quotes","Drawings","Customer Info"] },
-  { quoteNumber:"SCM-Q2025-0138", revision:1, description:"Pump Assembly",      dateCreated:"2025-01-10", status:"completed", value:28750,  subfolders:["Quote Form","Vendor Quotes","Drawings","Customer Info"] },
-  { quoteNumber:"SCM-Q2025-0135", revision:3, description:"Tank Project",       dateCreated:"2025-01-08", status:"revision",  value:67890,  subfolders:["Quote Form","Vendor Quotes","Drawings","Customer Info"] },
-  { quoteNumber:"SCM-Q2025-0132", revision:1, description:"Conveyor System",    dateCreated:"2025-01-05", status:"pending",   value:156420, subfolders:["Quote Form","Vendor Quotes","Drawings","Customer Info"] },
-];
+const API_BASE = (process.env.REACT_APP_API_BASE || 'http://localhost:4000').replace(/\/+$/, '');
 
 export default function CustomerQuoteDetail() {
-  const { customerName } = useParams();
-  const nav = useNavigate();
-  const folders = useMemo(()=>SAMPLE_FOLDERS,[]);
+  // Route param is :customerName (keep a fallback if router supplied :slug previously)
+  const params = useParams();
+  const slug = params.customerName ?? params.slug ?? Object.values(params)[0] ?? '';
 
-  const totalQuotes = folders.length;
-  const totalValue  = folders.reduce((s,f)=>s+f.value,0);
-  const activeCount = folders.filter(f=>f.status==="active").length;
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [customer, setCustomer] = useState(decodeURIComponent(slug || ''));
+  const [quotes, setQuotes] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true); setError('');
+      try {
+        const res = await fetch(`${API_BASE}/api/quotes/customers/${encodeURIComponent(slug || '')}`, { credentials: 'include' });
+        const json = await res.json().catch(()=>({}));
+        if (!res.ok || json.ok === false) throw new Error(json.error || `HTTP ${res.status}`);
+        if (!alive) return;
+        setCustomer(json.customer ?? decodeURIComponent(slug));
+        setQuotes(Array.isArray(json.quotes) ? json.quotes : []);
+      } catch (e) {
+        if (!alive) return;
+        setError(e?.message || String(e));
+        setQuotes([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [slug]);
+
+  const stats = useMemo(() => ({ count: quotes.length }), [quotes]);
+
+  const container = { padding: 20, maxWidth: 1100, margin: '0 auto' };
+  const button    = { padding:'10px 14px', borderRadius:10, border:'1px solid #d1d5db', background:'#f9fafb', fontWeight:700, cursor:'pointer' };
+  const primary   = { ...button, background:'#2563eb', color:'#fff', borderColor:'#2563eb' };
+  const grid      = { display:'grid', gap:12, gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))' };
+  const card      = { border:'1px solid #e5e7eb', borderRadius:12, padding:14, background:'#fff' };
+
+  const gotoSection = (qNo, section) => {
+    if (!section) return;
+    navigate(`/quotes/customers/${encodeURIComponent(customer)}/${encodeURIComponent(qNo)}/${section}`);
+  };
+
+  const sectionOptions = [
+    ['drawings','Drawings'],
+    ['uploads','Uploads'],
+    ['vendor-quotes','Vendor Quotes'],
+    ['quality-info','Quality Info'],
+    ['customer-notes','Customer Notes'],
+    ['photos','Photos'],
+    ['exports','Exports'],
+    ['internal-notes','Internal Notes'],
+    ['change-orders','Change Orders'],
+    ['quote-form','Quote Form'],
+  ];
 
   return (
-    <>
-      <header className="header">
-        <div className="logo-section">
-          <div className="logo" />
-          <div className="breadcrumb">
-            <Link to="/">Dashboard</Link>
-            <span>›</span>
-            <Link to="/quotes">Quotes</Link>
-            <span>›</span>
-            <Link to="/quotes/customers">Customer Quotes</Link>
-            <span>›</span>
-            <span className="customer-name">{decodeURIComponent(customerName)}</span>
-          </div>
-        </div>
-        <div className="nav-section">
-          <button className="back-btn" onClick={()=>nav("/quotes/customers")}>← Back to Customers</button>
-        </div>
-      </header>
+    <div style={container}>
+      <div style={{ marginBottom: 8 }}>
+        <button onClick={() => navigate('/quotes/customers')} style={button}>← Back to Customers</button>
+      </div>
 
-      <main className="main-content">
-        <div className="page-header">
-          <h1 className="page-title">
-            <div className="customer-icon">🏢</div>
-            <span>{decodeURIComponent(customerName)}</span>
-          </h1>
-          <p className="page-subtitle">Quote folders and project documentation</p>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+        <h1 style={{ margin:0, fontSize:28, fontWeight:800 }}>{customer || '(No name)'}</h1>
+        <div style={{ display:'flex', gap:10 }}>
+          <Link to="/quotes/new" state={{ customerName: customer }}>
+            <button style={primary}>+ New Quote</button>
+          </Link>
         </div>
+      </div>
 
-        <div className="quick-actions">
-          <div className="action-buttons">
-            <Link className="action-btn" to={`/quote/new?customer=${encodeURIComponent(customerName)}`}>➕ New Quote</Link>
-            <Link className="action-btn secondary" to={`/quotes/log?customer=${encodeURIComponent(customerName)}`}>📋 Quote Log</Link>
-            <button className="action-btn secondary" onClick={()=>alert("Export (stub)")}>📊 Export Data</button>
-          </div>
-          <div className="customer-stats">
-            <div className="stat"><div className="stat-number">{totalQuotes}</div><div className="stat-label">Total Quotes</div></div>
-            <div className="stat"><div className="stat-number">${Math.round(totalValue/1000)}K</div><div className="stat-label">Total Value</div></div>
-            <div className="stat"><div className="stat-number">{activeCount}</div><div className="stat-label">Active</div></div>
+      <div style={{ margin:'8px 0 16px' }}><strong>{stats.count}</strong> total quote(s)</div>
+
+      {loading && <div>Loading…</div>}
+      {error && <div style={{ color:'#b00020', marginBottom: 12 }}>Failed to load: {error}</div>}
+
+      {!loading && !error && quotes.length === 0 && (
+        <div style={{ border: '1px dashed #d1d5db', borderRadius: 12, padding: 18, color: '#374151', background: '#fafafa' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>No quote folders yet</div>
+          <div>Quote folders will be created when you save new quotes for this customer.</div>
+          <div style={{ marginTop: 12 }}>
+            <Link to="/quotes/new" state={{ customerName: customer }}>
+              <button style={{ ...primary, padding: '12px 18px' }}>Create First Quote</button>
+            </Link>
           </div>
         </div>
+      )}
 
-        {folders.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">📁</div>
-            <h2 className="empty-title">No quote folders yet</h2>
-            <p className="empty-subtitle">Quote folders will be created when you save new quotes for this customer</p>
-            <Link className="create-quote-btn" to={`/quote/new?customer=${encodeURIComponent(customerName)}`}>Create First Quote</Link>
-          </div>
-        ) : (
-          <div className="quote-folders">
-            {folders.map(f=>(
-              <div key={f.quoteNumber} className="quote-folder-card" onClick={() => alert(`Open folder ${f.quoteNumber} Rev ${f.revision} (stub)`)} >
-                {f.revision>1 && <div className="revision-badge">Rev {f.revision}</div>}
-                <div className="quote-folder-header">
-                  <div className="quote-folder-icon">📁</div>
-                  <div className="quote-folder-info">
-                    <div className="quote-number">{f.quoteNumber}</div>
-                    <div className="quote-description">{f.description}</div>
-                    <div className="quote-date">Created: {new Date(f.dateCreated).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})}</div>
-                  </div>
-                </div>
-                <div className="quote-subfolders">
-                  {f.subfolders.map(s=>(
-                    <div key={s} className="subfolder-chip">📄 {s}</div>
+      {!loading && !error && quotes.length > 0 && (
+        <div style={grid}>
+          {quotes.map(q => (
+            <div key={q.dirName} style={card}>
+              <div style={{ fontWeight:800 }}>{q.quoteNo}{q.description ? ` — ${q.description}` : ''}</div>
+              <div style={{ fontSize:12, color:'#6b7280' }}>Updated {new Date(q.mtimeMs).toLocaleString()}</div>
+              <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
+                <button style={button} onClick={() => gotoSection(q.quoteNo, 'drawings')}>Open Drawings</button>
+                <button style={button} onClick={() => gotoSection(q.quoteNo, 'uploads')}>Open Uploads</button>
+                <select
+                  aria-label="Open section"
+                  defaultValue=""
+                  onChange={(e)=>gotoSection(q.quoteNo, e.target.value)}
+                  style={{ ...button, padding:'10px 10px' }}
+                >
+                  <option value="" disabled>Open…</option>
+                  {sectionOptions.map(([val,label]) => (
+                    <option key={val} value={val}>{label}</option>
                   ))}
-                </div>
-                <div className="quote-actions">
-                  <div className={`quote-status status-${f.status}`}>{f.status}</div>
-                  <div className="quote-value">${f.value.toLocaleString()}</div>
-                </div>
+                </select>
               </div>
-            ))}
-          </div>
-        )}
-      </main>
-    </>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

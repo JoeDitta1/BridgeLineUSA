@@ -1,4 +1,4 @@
-﻿// src/App.js
+﻿// frontend/src/App.js
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
@@ -10,6 +10,7 @@ import CustomerQuoteDetail from "./pages/CustomerQuoteDetail";
 import QuoteForm from "./pages/QuoteForm";
 import QuoteLog from "./pages/QuoteLog";
 import QuoteFiles from "./pages/QuoteFiles";
+import QuoteFolderView from "./pages/QuoteFolderView"; // NEW
 
 // Public site / auth
 import Marketing from "./pages/Marketing"; // make sure this file exists
@@ -43,6 +44,7 @@ export default function App() {
       {/* Customer quotes navigation */}
       <Route path="/quotes/customers" element={<CustomerQuotes />} />
       <Route path="/quotes/customers/:customerName" element={<CustomerQuoteDetail />} />
+      <Route path="/quotes/customers/:customerName/:quoteNo/:section" element={<QuoteFolderView />} />
 
       {/* Other modules (stubs for now) */}
       <Route path="/production" element={<Stub title="Production" />} />

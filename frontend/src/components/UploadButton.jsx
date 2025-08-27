@@ -54,7 +54,7 @@ export default function UploadButton({ onUploaded }) {
 
       {last && (
         <a
-          href={`http://localhost:4000/uploads/${last.fileName}`}
+          href={`${process.env.REACT_APP_API_BASE || ''}/uploads/${last.fileName}`}
           target="_blank"
           rel="noreferrer"
           style={{ fontSize: 12 }}

@@ -1,8 +1,5 @@
 // client/src/api/upload.js
-const API_BASE =
-  (import.meta?.env && import.meta.env.VITE_API_BASE) ||
-  (typeof process !== "undefined" && process.env?.REACT_APP_API_BASE) ||
-  "http://localhost:4000";
+const API_BASE = process.env.REACT_APP_API_BASE || '';
 
 /**
  * Upload a single file to /api/upload (field name: "file")

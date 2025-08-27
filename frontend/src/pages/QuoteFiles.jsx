@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+const API_BASE = process.env.REACT_APP_API_BASE || '';
 
 export default function QuoteFiles() {
   const { quoteNo } = useParams();
