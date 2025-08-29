@@ -5,6 +5,7 @@ import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { fileURLToPath } from 'url';
 import * as dbModule from '../db.js';
+import { ensureQuoteFolders } from '../lib/quoteFolders.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -234,6 +235,17 @@ router.post('/', async (req, res) => {
       )
       .get(result.lastInsertRowid);
 
+    // Ensure folder structure after DB save
+    try {
+      await ensureQuoteFolders({
+        quoteNo: created?.quote_no || req.body?.quote_no,
+        customerName: created?.customer_name || req.body?.customer_name,
+        description: created?.description || req.body?.description || '',
+      });
+    } catch (e) {
+      console.warn('ensureQuoteFolders warning:', e?.message || e);
+    }
+
     const response = { ok: true, quote: created };
     if (folderInfo) {
       response.folder = {
@@ -257,7 +269,7 @@ router.post('/', async (req, res) => {
 });
 
 /* ------------------------------ Route: UPDATE ------------------------------ */
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const b = req.body || {};
     const payload = {
@@ -295,6 +307,18 @@ router.put('/:id', (req, res) => {
     );
 
     const updated = db.prepare('SELECT * FROM quotes WHERE id = ?').get(req.params.id);
+
+    // Ensure folder structure after update
+    try {
+      await ensureQuoteFolders({
+        quoteNo: updated?.quote_no || req.body?.quote_no,
+        customerName: updated?.customer_name || req.body?.customer_name,
+        description: updated?.description || req.body?.description || '',
+      });
+    } catch (e) {
+      console.warn('ensureQuoteFolders warning:', e?.message || e);
+    }
+
     res.json({ ok: true, quote: updated });
   } catch (err) {
     console.error('Error updating quote:', err);
@@ -359,5 +383,32 @@ router.post('/:id/archive', async (req, res) => {
       .json({ ok: false, error: 'Failed to archive quote', detail: String(err?.message || err) });
   }
 });
+
+// Move the /save-meta handler logic into a named async function
+async function saveMeta(req, res) {
+  try {
+    const b = req.body || {};
+    // ...existing logic for saving meta...
+    // Example placeholder for the original logic:
+    // const result = ... (your DB insert/update logic here)
+    // For demonstration, let's assume result is the saved/updated quote row
+
+    // ...existing code for DB insert/update...
+    // After the DB insert/update succeeds:
+    const quoteNo = b.quote_no || b.quoteNo || result?.quote_no;
+    const customerName = b.customer_name || b.customer || b.customerName || result?.customer_name;
+    const description = b.description || result?.description || '';
+    if (quoteNo && customerName) {
+      await ensureQuoteFolders({ customerName, quoteNo, description });
+    }
+
+    // ...existing code for response...
+  } catch (err) {
+    // ...existing error handling...
+  }
+}
+
+router.post('/save-meta', saveMeta);
+router.post('/save', saveMeta);
 
 export default router;

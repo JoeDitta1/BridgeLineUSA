@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+import { API_BASE } from "../api/base";
 
 const columns = [
   { key: 'quote_no', label: 'Quote No.' },

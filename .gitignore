@@ -5,3 +5,4 @@ backend/node_modules/
 frontend/build/
 backend/uploads/
 backend/data/
+frontend/.env.local

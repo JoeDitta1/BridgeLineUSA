@@ -3,8 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Select from 'react-select';
 import UploadButton from '../components/UploadButton';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+import { API_BASE } from "../api/base";
 
 /* --------------------------------- Helpers --------------------------------- */
 
@@ -354,23 +353,15 @@ async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
 }
 
 /** NEW: Initialize folder tree (idempotent). */
-async function initFoldersAPI({ quote_no, customer_name, description }) {
-  const url = `${API_BASE}/api/quotes/${encodeURIComponent(quote_no)}/init-folders`;
-  const res = await fetch(url, {
+async function initFoldersAPI({ quoteNo, customerName, description }) {
+  if (!quoteNo || !customerName) return null;
+  const res = await fetch(`${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/init-folders`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customer_name, quote_no, description }),
+    body: JSON.stringify({ customer_name: customerName, description: description || '' }),
+    credentials: 'include',
   });
-  const text = await res.text();
-  if (res.status === 404) return { ok: true, skipped: true }; // backend not implemented yet—safe to ignore
-  let data = {};
-  try { data = text ? JSON.parse(text) : {}; } catch (e) {
-    throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
-  }
-  if (!res.ok || data.ok === false) {
-    throw new Error(data?.detail || data?.error || `Init folders failed (${res.status})`);
-  }
-  return data;
+  return res.ok ? res.json() : null;
 }
 
 /* ================================== App ================================== */
@@ -742,43 +733,56 @@ export default function QuoteForm() {
     try {
       setSaving(true);
 
-      // Ensure a quote number exists (create DB row) for BOTH draft and final
-      if (!meta.quoteNo?.trim()) {
-        const seed = buildPayloadFromMeta(status === 'final' ? 'Submitted' : 'Draft');
-        const out = await saveQuoteAPI(seed);
+      let effectiveQuoteNo = (meta.quoteNo || routeQuoteNo || '').trim();
+
+      if (!effectiveQuoteNo) {
+        const out = await saveQuoteAPI(buildPayloadFromMeta('Draft'));
         if (out?.quote_no) {
-          setMeta(m => ({ ...m, quoteNo: out.quote_no }));
+          effectiveQuoteNo = out.quote_no;
+          setMeta(m => ({ ...m, quoteNo: effectiveQuoteNo }));
         }
       }
 
-      // Save meta/app state
-      const result = await saveQuoteMetaAPI({ meta: { ...meta, quoteNo: (meta.quoteNo || '').trim() }, rows, nde }, status);
-      const savedQuoteNo = result.quoteNo || result.quote_no || meta.quoteNo || routeQuoteNo || '';
+      const result = await saveQuoteMetaAPI({ meta: { ...meta, quoteNo: effectiveQuoteNo }, rows, nde }, status);
+      effectiveQuoteNo = result.quoteNo || result.quote_no || effectiveQuoteNo;
 
-      if (savedQuoteNo && savedQuoteNo !== meta.quoteNo) {
-        setMeta(m => ({ ...m, quoteNo: savedQuoteNo }));
-      }
-
-      // Initialize folder tree (idempotent on server). Safe to ignore if not implemented.
-      if (savedQuoteNo) {
-        try {
-          await initFoldersAPI({
-            quote_no: savedQuoteNo,
-            customer_name: (meta.customerName || '').trim(),
-            description: (meta.description || '').trim() || ''
+      // Ensure the folder tree exists for this quote (customer + SCM-... + subfolders)
+      try {
+        if (effectiveQuoteNo) {
+          await fetch(`${API_BASE}/api/quotes/${encodeURIComponent(effectiveQuoteNo)}/init-folders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customer_name: meta.customerName,
+              description: meta.description || ''
+            }),
           });
-        } catch (e) {
-          console.warn('Folder init warning:', e);
         }
+      } catch (e) {
+        console.warn('Init folders failed:', e);
+      }
+
+      try {
+        await initFoldersAPI({
+          quoteNo: effectiveQuoteNo,
+          customerName: (meta.customerName || '').trim(),
+          description: (meta.description || '').trim(),
+        });
+      } catch (e) {
+        console.warn('init-folders warning:', e?.message || e);
+      }
+
+      if (effectiveQuoteNo && effectiveQuoteNo !== meta.quoteNo) {
+        setMeta(m => ({ ...m, quoteNo: effectiveQuoteNo }));
       }
 
       // Navigate
-      if (goto === 'files' && savedQuoteNo) {
-        navigate(`/quotes/${encodeURIComponent(savedQuoteNo)}/files`);
+      if (goto === 'files' && effectiveQuoteNo) {
+        navigate(`/quotes/${encodeURIComponent(effectiveQuoteNo)}/files`);
       } else if (goto === 'log') {
         navigate('/quotes');
       } else {
-        alert(`${status === 'final' ? 'Finalized' : 'Saved'}: ${savedQuoteNo}`);
+        alert(`${status === 'final' ? 'Finalized' : 'Saved'}: ${effectiveQuoteNo}`);
       }
     } catch (e) {
       alert(`Save failed: ${e.message}`);
@@ -1395,10 +1399,10 @@ export default function QuoteForm() {
                         <td style={{ border:'1px solid #e5e7eb', padding:8 }}>
                           {r.material?.type || ''}{r.material?.size ? ` • ${r.material.size}` : ''}
                         </td>
-                        <td style={{ border:'1px solid #e5e7eb', padding:8 }}>{displayGrade(r.grade)}</td>
+                        <td style={{ border:'1px solid #e7eb', padding:8 }}>{displayGrade(r.grade)}</td>
                         <td style={{ border:'1px solid #e5e7eb', padding:8 }}>{r.unitType}</td>
                         <td style={{ border:'1px solid #e5e7eb', padding:8 }}>
-                          {r.unitType === 'Per Foot' && (`Length: ${r.lengthFt || 0} ft`)}
+                                                   {r.unitType === 'Per Foot' && (`Length: ${r.lengthFt || 0} ft`)}
                           {r.unitType === 'Each' && ('Each')}
                           {r.unitType === 'Sq In' && (`${r.lengthIn || 0} in × ${r.widthIn || 0} in ${r.padConventional ? '(Conventional)' : ''}`)}
                         </td>
@@ -1531,3 +1535,4 @@ export default function QuoteForm() {
   );
 }
 // End of file
+
