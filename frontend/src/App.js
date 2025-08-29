@@ -15,6 +15,12 @@ import QuoteFolderView from "./pages/QuoteFolderView"; // NEW
 // Public site / auth
 import Marketing from "./pages/Marketing"; // make sure this file exists
 import Login from "./pages/Login";         // make sure this file exists
+// Admin pages
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import Settings from "./pages/admin/Settings";
+import Users from "./pages/admin/Users";
+import Equipment from "./pages/admin/Equipment";
+import SystemMaterials from "./pages/admin/SystemMaterials";
 
 const MKT_AT_ROOT = process.env.REACT_APP_MARKETING_AT_ROOT === "true";
 
@@ -45,6 +51,13 @@ export default function App() {
       <Route path="/quotes/customers" element={<CustomerQuotes />} />
       <Route path="/quotes/customers/:customerName" element={<CustomerQuoteDetail />} />
       <Route path="/quotes/customers/:customerName/:quoteNo/:section" element={<QuoteFolderView />} />
+
+  {/* Admin */}
+  <Route path="/admin" element={<AdminDashboard />} />
+  <Route path="/admin/settings" element={<Settings />} />
+  <Route path="/admin/users" element={<Users />} />
+  <Route path="/admin/equipment" element={<Equipment />} />
+  <Route path="/admin/materials" element={<SystemMaterials />} />
 
       {/* Other modules (stubs for now) */}
       <Route path="/production" element={<Stub title="Production" />} />

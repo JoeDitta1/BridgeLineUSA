@@ -15,6 +15,9 @@ import settingsRoute from './routes/settingsRoute.js';
 import * as dbModule from './db.js';
 import customersRoute from './routes/customersRoute.js';
 import quoteInitRoute from './routes/quoteInitRoute.js';
+import adminRoute from './routes/adminRoute.js';
+import equipmentRoute from './routes/equipmentRoute.js';
+import systemMaterialsRoute from './routes/systemMaterialsRoute.js';
 
 /* ------------------------- ES module __dirname shim ------------------------ */
 const __filename = fileURLToPath(import.meta.url);
@@ -22,6 +25,23 @@ const __dirname = dirname(__filename);
 
 /* ----------------------------- DB compatibility --------------------------- */
 const db = dbModule.default ?? dbModule.db ?? dbModule;
+
+// Ensure migrations run on startup
+try {
+  if (typeof dbModule.migrate === 'function') {
+    dbModule.migrate();
+    try {
+      const row = db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='equipment'").get();
+      console.log('[DB] migrate() executed; equipment table exists:', !!row);
+    } catch (e) {
+      console.warn('[DB] migrate verification failed:', e && e.message ? e.message : e);
+    }
+  } else {
+    console.log('[DB] migrate() not found on db module');
+  }
+} catch (e) {
+  console.error('[DB] migrate() failed:', e && e.stack ? e.stack : e);
+}
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -146,6 +166,9 @@ app.use('/api/materials', materialsRoute);
 app.use('/api/quotes', quotesRoute);
 app.use('/api/quotes', quoteInitRoute);
 app.use('/api/settings', settingsRoute); // <— mounted (was imported but not used)
+app.use('/api/admin', adminRoute); // admin endpoints
+app.use('/api/equipment', equipmentRoute); // equipment endpoints
+app.use('/api/system-materials', systemMaterialsRoute);
 
 // File routes mounted under /api/quotes to match frontend expectations
 app.use('/api/quotes', quoteFilesRoute);
