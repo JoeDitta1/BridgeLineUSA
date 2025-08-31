@@ -6,3 +6,4 @@ frontend/build/
 backend/uploads/
 backend/data/
 frontend/.env.local
+/backend/.env.local
