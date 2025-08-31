@@ -471,21 +471,63 @@ export default function QuoteForm() {
       try {
         const res = await fetch(`${API_BASE}/api/materials`);
         const text = await res.text();
-        let rows;
-        try { rows = text ? JSON.parse(text) : []; } catch (e) {
+        let rowsRaw;
+        try { rowsRaw = text ? JSON.parse(text) : []; } catch (e) {
           throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
         }
-        let base = (rows || []).map(toMatOption).map(augmentOption);
-        base = mergeUniqueByValue(base, buildPlateOptions());
-        base = mergeUniqueByValue(base, buildSheetOptions());
-        base = base.map(augmentOption);
-        setMaterialOptions(base);
+
+        // 1) Client-generated Plate — tag as 'generic-plate'
+        const genericPlateOptions = buildPlateOptions().map(o => ({
+          ...o,
+          source: 'generic-plate',
+          group: 'Generic Plate (Thickness Catalog)'
+        }));
+
+        // 2) Server catalog items (from /api/materials)
+        const serverOptions = (rowsRaw || []).map(m => {
+          const opt = augmentOption(toMatOption(m));
+          return {
+            ...opt,
+            raw: m,
+            source: 'server-catalog',
+            group: 'Materials Catalog (from JSON)'
+          };
+        });
+
+        // 3) Include sheet/gauge options in the server catalog group so UI shows them too
+        const sheetOptions = buildSheetOptions().map(o => ({ ...o, source: 'generic-sheet', group: 'Materials Catalog (from JSON)' }));
+
+        // 4) De-dupe within each source only (don't cross-merge)
+        const uniqBy = (arr, keyFn) => {
+          const seen = new Set();
+          return arr.filter(x => {
+            const k = keyFn(x);
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+          });
+        };
+
+        const genericPlateUnique = uniqBy(genericPlateOptions, o => o.value);
+        const serverUnique = uniqBy([...serverOptions, ...sheetOptions], o => o.value);
+
+        // 5) Provide grouped options to react-select
+        const groupedOptions = [
+          { label: 'Generic Plate (Thickness Catalog)', options: genericPlateUnique },
+          { label: 'Materials Catalog (from JSON)',     options: serverUnique }
+        ];
+
+        setMaterialOptions(groupedOptions);
       } catch {
-        let base = [];
-        base = mergeUniqueByValue(base, buildPlateOptions());
-        base = mergeUniqueByValue(base, buildSheetOptions());
-        base = base.map(augmentOption);
-        setMaterialOptions(base);
+        // fallback: only client-side generated plates & sheets
+        const genericPlateOptions = buildPlateOptions().map(o => ({ ...o, source: 'generic-plate', group: 'Generic Plate (Thickness Catalog)' }));
+        const sheetOptions = buildSheetOptions().map(o => ({ ...o, source: 'generic-sheet', group: 'Materials Catalog (from JSON)' }));
+        const uniqBy = (arr, keyFn) => { const seen = new Set(); return arr.filter(x => { const k = keyFn(x); if (seen.has(k)) return false; seen.add(k); return true; }); };
+        const groupedOptions = [
+          { label: 'Generic Plate (Thickness Catalog)', options: uniqBy(genericPlateOptions, o => o.value) },
+          { label: 'Materials Catalog (from JSON)',     options: uniqBy(sheetOptions, o => o.value) }
+        ];
+        setMaterialOptions(groupedOptions);
       }
     })();
   }, []);
@@ -641,10 +683,12 @@ export default function QuoteForm() {
 
   // material select
   const onMaterialSelect = (i, selected) => {
-    const selectedAug = augmentOption(selected);
-    const unitCurrent = rows[i].unitType;
-    const famKey = normalizeFamily(selectedAug?.type || selectedAug?.category || selectedAug?.family || '');
-    const patch = { material: selectedAug };
+  // Support grouped option objects (with .source and .raw) or the existing option shape
+  const normalized = selected && selected.raw ? { ...selected, ...augmentOption(selected) } : augmentOption(selected);
+  const selectedAug = normalized;
+  const unitCurrent = rows[i].unitType;
+  const famKey = normalizeFamily(selectedAug?.type || selectedAug?.category || selectedAug?.family || '');
+  const patch = { material: selectedAug };
     if ((famKey === 'Plate' || famKey === 'Sheet') && unitCurrent !== 'Sq In') {
       patch.unitType = 'Sq In';
       patch.lengthIn = '';

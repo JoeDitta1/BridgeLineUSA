@@ -2,6 +2,14 @@
 import express from "express";
 import fs from "fs";
 import path from "path";
+import { createClient } from '@supabase/supabase-js';
+
+// Supabase client (optional, enabled via USE_SUPABASE env)
+const USE_SUPABASE = String(process.env.USE_SUPABASE || '').toLowerCase() === '1' ||
+                     String(process.env.USE_SUPABASE || '').toLowerCase() === 'true';
+const SUPA_URL = process.env.SUPABASE_URL;
+const SUPA_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+const supabase = (USE_SUPABASE && SUPA_URL && SUPA_KEY) ? createClient(SUPA_URL, SUPA_KEY) : null;
 
 const router = express.Router();
 
@@ -70,33 +78,80 @@ function enrichMaterialRow(row) {
 
 /** ---------- route (same path & behavior) ---------- **/
 
-router.get("/", (_req, res) => {
-  console.log("=== MATERIALS ROUTE HIT ===");
-  console.log("Looking for file at:", JSON_PATH);
-  
+// GET /api/materials/families
+router.get('/families', async (req, res) => {
   try {
-    console.log("Attempting to read file...");
-    const text = fs.readFileSync(JSON_PATH, "utf8");
-    console.log("File read successfully, length:", text.length);
-    
-    const data = JSON.parse(text);
-    console.log("JSON parsed successfully");
-    
-    const list = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.materials)
-      ? data.materials
-      : [];
+    if (supabase) {
+      const { data, error } = await supabase.from('materials').select('category,type');
+      if (error) throw error;
+      const fams = new Set(
+        (data || [])
+          .map(r => (r.category || r.type || '').trim())
+          .filter(Boolean)
+      );
+      return res.json({ ok: true, families: [...fams].sort() });
+    }
 
-    console.log("Final list length:", list.length);
-    
+    // JSON fallback
+    const text = fs.readFileSync(JSON_PATH, 'utf8');
+    const data = JSON.parse(text);
+    const list = Array.isArray(data) ? data : Array.isArray(data?.materials) ? data.materials : [];
+    const fams = new Set(list.map(m => (m.category || m.type || '').trim()).filter(Boolean));
+    res.json({ ok: true, families: [...fams].sort() });
+  } catch (e) {
+    console.error('[materials:families]', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// GET /api/materials/by-family?family=Plate
+router.get('/by-family', async (req, res) => {
+  try {
+    const family = (req.query.family || '').trim();
+    if (!family) return res.json({ ok: true, items: [] });
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('materials')
+        .select('*')
+        .or(`category.eq.${family},type.eq.${family}`);
+      if (error) throw error;
+      return res.json({ ok: true, count: data.length, items: data });
+    }
+
+    // JSON fallback
+    const text = fs.readFileSync(JSON_PATH, 'utf8');
+    const data = JSON.parse(text);
+    const list = Array.isArray(data) ? data : Array.isArray(data?.materials) ? data.materials : [];
+    const items = list.filter(m => ((m.category || m.type || '') === family));
+    return res.json({ ok: true, count: items.length, items });
+  } catch (e) {
+    console.error('[materials:by-family]', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// GET /api/materials (full list)
+router.get('/', async (_req, res) => {
+  console.log('=== MATERIALS ROUTE HIT ===');
+  console.log('Looking for file at:', JSON_PATH);
+
+  try {
+    if (supabase) {
+      const { data, error } = await supabase.from('materials').select('*');
+      if (error) throw error;
+      const enriched = (data || []).map(enrichMaterialRow);
+      return res.json(enriched);
+    }
+
+    // JSON fallback
+    const text = fs.readFileSync(JSON_PATH, 'utf8');
+    const data = JSON.parse(text);
+    const list = Array.isArray(data) ? data : Array.isArray(data?.materials) ? data.materials : [];
     const enriched = list.map(enrichMaterialRow);
-    console.log("Sending", enriched.length, "materials");
-    
     res.json(enriched);
   } catch (e) {
-    console.error("ERROR in materials route:", e.message);
-    console.error("Full error:", e);
+    console.error('ERROR in materials route:', e && e.message ? e.message : e);
     res.json([]);
   }
 });

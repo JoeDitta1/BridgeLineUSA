@@ -13,12 +13,14 @@
     "materials:apply": "node scripts/materials-enrich.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.56.1",
     "better-sqlite3": "^9.4.0",
     "cors": "^2.8.5",
     "csv-parse": "^5.5.6",
     "dotenv": "^17.2.1",
     "express": "^4.19.2",
     "multer": "^1.4.5-lts.1",
+    "pg": "^8.16.3",
     "uuid": "^11.1.0"
   }
 }

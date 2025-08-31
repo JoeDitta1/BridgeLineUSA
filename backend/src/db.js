@@ -75,6 +75,45 @@ export function migrate() {
     );
   `);
 
+  // If an old key/value `settings` table exists, migrate it safely to a
+  // preserved table and create the new single-row `settings` table used by
+  // the rest of the backend. This avoids the "no such column: id" error
+  // when older DBs still have the legacy schema.
+  try {
+    const cols = db.prepare("PRAGMA table_info('settings')").all() || [];
+    const hasKeyCol = cols.some(c => c.name === 'key');
+    const hasIdCol = cols.some(c => c.name === 'id');
+    if (hasKeyCol && !hasIdCol) {
+      // Preserve existing kv table
+      db.exec("ALTER TABLE settings RENAME TO settings_kv;");
+
+      // Create new single-row settings table expected by current code
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          org_prefix TEXT NOT NULL DEFAULT 'SCM',
+          system_abbr TEXT,
+          quote_series TEXT NOT NULL DEFAULT 'Q',
+          quote_pad INTEGER NOT NULL DEFAULT 4,
+          next_quote_seq INTEGER NOT NULL DEFAULT 1,
+          sales_series TEXT NOT NULL DEFAULT 'S',
+          sales_pad INTEGER NOT NULL DEFAULT 3,
+          next_sales_seq INTEGER NOT NULL DEFAULT 1
+        );
+      `);
+
+      // Ensure the single required row exists
+      db.exec(`
+        INSERT OR IGNORE INTO settings (id, org_prefix, quote_series, quote_pad, next_quote_seq, sales_series, sales_pad, next_sales_seq)
+        VALUES (1, 'SCM', 'Q', 4, 1, 'S', 3, 1);
+      `);
+
+      console.log('[DB] Legacy settings table detected and migrated to settings_kv; new settings row created');
+    }
+  } catch (e) {
+    console.warn('[DB] settings migration check failed:', e && e.message ? e.message : e);
+  }
+
   // NEW: equipment tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS equipment (
