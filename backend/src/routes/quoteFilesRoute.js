@@ -6,6 +6,8 @@ import fsp from 'fs/promises';
 import path from 'path';
 import mime from 'mime-types';
 import * as dbModule from '../db.js';
+import { v4 as uuidv4 } from 'uuid';
+import fileServiceFactory from '../../src/fileService.js';
 
 const db = dbModule.default ?? dbModule.db ?? dbModule;
 const router = express.Router();
@@ -46,32 +48,9 @@ async function findFileAnySubdir(customerName, quoteNo, filename) {
 }
 
 /* ------------------------------- multer setup ------------------------------ */
-// Save to: data/quotes/<CustomerName>/<QuoteNo>/<subdir>
-const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    try {
-      const { quoteNo } = req.params;
-      const subdir = String(req.query.subdir || 'uploads');
-      const customerName = getCustomerByQuoteNo(quoteNo);
-      if (!customerName) return cb(new Error(`Quote ${quoteNo} not found`));
-
-      const { dir } = await ensureQuoteTree(customerName, quoteNo);
-      const dest = path.join(dir, safeFolderName(subdir));
-      await fsp.mkdir(dest, { recursive: true });
-      cb(null, dest);
-    } catch (e) {
-      cb(e);
-    }
-  },
-  filename: (req, file, cb) => {
-    // keep readable names but avoid collisions
-    const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    const base = path.parse(file.originalname).name.replace(/\s+/g, '_');
-    const ext = path.extname(file.originalname);
-    cb(null, `${base}__${ts}${ext}`);
-  }
-});
-const upload = multer({ storage });
+// Use memory storage and hand buffers to the fileService (local or supabase)
+const upload = multer({ storage: multer.memoryStorage() });
+const fileService = fileServiceFactory.createFileService();
 
 /* ----------------------------- list all files ------------------------------ */
 // GET /api/quotes/:quoteNo/files   (returns ARRAY for backward compat)
@@ -114,22 +93,42 @@ router.get('/:quoteNo/files', async (req, res) => {
 /* --------------------------------- upload ---------------------------------- */
 // NEW preferred: POST /api/quotes/:quoteNo/upload?subdir=uploads|drawings|vendors|notes
 // field name: files (multiple OK)
-router.post('/:quoteNo/upload', upload.array('files'), (req, res) => {
+router.post('/:quoteNo/upload', upload.array('files'), async (req, res) => {
   try {
     const { quoteNo } = req.params;
     const subdir = String(req.query.subdir || 'uploads');
     const customerName = getCustomerByQuoteNo(quoteNo);
     if (!customerName) return res.status(404).json({ ok: false, error: `Quote ${quoteNo} not found` });
 
-    const uploaded = (req.files || []).map(f => ({
-      originalname: f.originalname,
-      filename: f.filename,
-      size: f.size,
-      subdir,
-      url: `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(subdir)}/${encodeURIComponent(f.filename)}`
-    }));
-    res.json({ ok: true, uploaded });
+    const attachments = [];
+    for (const f of (req.files || [])) {
+      const meta = await fileService.save({
+        parent_type: 'quote',
+        parent_id: quoteNo,
+        customer_name: customerName,
+        subdir,
+        originalname: f.originalname,
+        buffer: f.buffer,
+        content_type: f.mimetype,
+        uploaded_by: req.user?.id || null
+      });
+
+      // if local driver, insert a row in sqlite attachments table; supabase driver already inserted
+      if (meta.storage === 'local') {
+        const stmt = db.prepare(`INSERT INTO attachments (id, parent_type, parent_id, label, object_key, content_type, size_bytes, sha256, uploaded_by, created_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1)`);
+        const id = uuidv4();
+        stmt.run(id, 'quote', quoteNo, subdir, meta.object_key, meta.content_type, meta.size_bytes, meta.sha256, req.user?.id || null);
+        attachments.push({ id, ...meta });
+      } else {
+        attachments.push(meta);
+      }
+    }
+
+    // Return updated quote + attachments list for client to re-render folder tree
+    const quote = db.prepare('SELECT * FROM quotes WHERE quote_no = ?').get(quoteNo);
+    res.json({ ok: true, quote, attachments });
   } catch (e) {
+    console.error('[upload] failed:', e && e.message ? e.message : e);
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });

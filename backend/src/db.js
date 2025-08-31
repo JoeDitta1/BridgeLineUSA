@@ -175,4 +175,46 @@ export function migrate() {
   } catch (e) {
     console.warn('[DB] seed material_families failed:', e && e.message ? e.message : e);
   }
+
+  // Attachments table (for Supabase/Postgres). For sqlite we keep a lightweight
+  // attachments table to support local installs as well.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS attachments (
+      id TEXT PRIMARY KEY,
+      parent_type TEXT NOT NULL,
+      parent_id TEXT NOT NULL,
+      label TEXT,
+      object_key TEXT NOT NULL UNIQUE,
+      content_type TEXT,
+      size_bytes INTEGER,
+      sha256 TEXT,
+      uploaded_by TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      version INTEGER DEFAULT 1
+    );
+    CREATE INDEX IF NOT EXISTS idx_attachments_parent ON attachments(parent_type, parent_id);
+  `);
+}
+
+// For Postgres/Supabase migrations: helper SQL to create desired schema with UUIDs
+export function pgMigrateAttachments(pgClient) {
+  // pgClient should be a connected pg client or Supabase sql runner. Caller must handle errors.
+  return pgClient.query(`
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    CREATE TABLE IF NOT EXISTS attachments (
+      id uuid primary key default gen_random_uuid(),
+      parent_type text not null check (parent_type in ('quote','sales_order','router','qc_step')),
+      parent_id text not null,
+      label text,
+      object_key text not null,
+      content_type text,
+      size_bytes bigint,
+      sha256 text,
+      uploaded_by uuid,
+      created_at timestamptz default now(),
+      version int default 1
+    );
+    CREATE INDEX IF NOT EXISTS idx_attachments_parent ON attachments (parent_type, parent_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_object_key ON attachments (object_key);
+  `);
 }
