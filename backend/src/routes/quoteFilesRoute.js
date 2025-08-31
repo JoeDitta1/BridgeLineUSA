@@ -54,16 +54,68 @@ const fileService = fileServiceFactory.createFileService();
 
 /* ----------------------------- list all files ------------------------------ */
 // GET /api/quotes/:quoteNo/files   (returns ARRAY for backward compat)
-// Now scans uploads/drawings/vendors/notes/exports
+// Prefer DB-driven attachments (Supabase or sqlite); fallback to filesystem
 router.get('/:quoteNo/files', async (req, res) => {
   try {
     const { quoteNo } = req.params;
     const customerName = getCustomerByQuoteNo(quoteNo);
     if (!customerName) return res.status(404).json([]);
 
-    const { dir, subdirs } = await ensureQuoteTree(customerName, quoteNo);
-    const rows = [];
+    const USE_SUPABASE = String(process.env.USE_SUPABASE || '').toLowerCase() === '1' ||
+      String(process.env.USE_SUPABASE || '').toLowerCase() === 'true';
 
+    // If supabase is enabled, query attachments table and build signed URLs
+    if (USE_SUPABASE && process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY)) {
+      const { createClient } = await import('@supabase/supabase-js');
+      const SUPA_URL = process.env.SUPABASE_URL;
+      const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
+      const supabase = createClient(SUPA_URL, SUPA_KEY);
+      const { data, error } = await supabase.from('attachments').select('*').eq('parent_type', 'quote').eq('parent_id', quoteNo).order('created_at', { ascending: false });
+      if (error) throw error;
+      const out = [];
+      for (const r of (data || [])) {
+        let signed = { url: null };
+        try {
+          // use fileService to create signed url
+          signed = await fileService.signedUrl(r.object_key, 60);
+        } catch (e) {}
+        out.push({
+          name: r.object_key.split('/').slice(-1)[0],
+          subdir: r.label || '',
+          size: r.size_bytes || null,
+          modifiedAt: r.created_at || null,
+          mime: r.content_type || 'application/octet-stream',
+          url: signed.url || `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(r.label || '')}/${encodeURIComponent(r.object_key.split('/').slice(-1)[0])}`
+        });
+      }
+      return res.json(out);
+    }
+
+    // If sqlite attachments exist, return them
+    try {
+      const rows = db.prepare('SELECT * FROM attachments WHERE parent_type = ? AND parent_id = ? ORDER BY created_at DESC').all('quote', quoteNo) || [];
+      if (rows.length > 0) {
+        const out = [];
+        for (const r of rows) {
+          const signed = await fileService.signedUrl(r.object_key, 60).catch(() => ({ url: null }));
+          out.push({
+            name: (r.object_key || '').split('/').slice(-1)[0],
+            subdir: r.label || '',
+            size: r.size_bytes || null,
+            modifiedAt: r.created_at || null,
+            mime: r.content_type || 'application/octet-stream',
+            url: signed.url || `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(r.label || '')}/${encodeURIComponent((r.object_key || '').split('/').slice(-1)[0])}`
+          });
+        }
+        return res.json(out);
+      }
+    } catch (e) {
+      // proceed to filesystem fallback
+    }
+
+    // Filesystem fallback (legacy)
+    const { dir, subdirs } = await ensureQuoteTree(customerName, quoteNo);
+    const files = [];
     for (const s of subdirs) {
       const p = path.join(dir, s);
       if (!fs.existsSync(p)) continue;
@@ -72,7 +124,7 @@ router.get('/:quoteNo/files', async (req, res) => {
         const full = path.join(p, name);
         const st = await fsp.stat(full);
         if (!st.isFile()) continue;
-        rows.push({
+        files.push({
           name,
           subdir: s,
           size: st.size,
@@ -82,10 +134,10 @@ router.get('/:quoteNo/files', async (req, res) => {
         });
       }
     }
-
-    rows.sort((a, b) => b.modifiedAt - a.modifiedAt);
-    res.json(rows);
+    files.sort((a, b) => b.modifiedAt - a.modifiedAt);
+    res.json(files);
   } catch (e) {
+    console.error('[list files] failed:', e && e.message ? e.message : e);
     res.status(500).json([]);
   }
 });
