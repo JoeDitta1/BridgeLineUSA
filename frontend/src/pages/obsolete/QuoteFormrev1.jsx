@@ -639,7 +639,11 @@ const removeUpload = (fileName) => {
             <h2 style={sectionTitle}>Step 1 — Quote Overview</h2>
             <div style={{ display: 'flex', gap: 8 }}>
 <UploadButton onUploaded={(res) => {
-  setUploads(prev => [{ originalName: res.originalName, fileName: res.fileName }, ...prev]);
+  // Normalize single/legacy response into array
+  const list = Array.isArray(res) ? res : (res ? [res] : []);
+  if (!list.length) return;
+  const mapped = list.map(r => ({ originalName: r.originalName || r.originalname || r.name || r.originalName, fileName: r.fileName || r.file_name || r.name || r.filename }));
+  setUploads(prev => [...mapped, ...prev]);
 }} />    {/* Uploaded files list */}
 {uploads.length > 0 && (
   <div style={{ marginTop: 12 }}>

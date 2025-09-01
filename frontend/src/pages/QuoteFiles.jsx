@@ -67,7 +67,36 @@ export default function QuoteFiles() {
         <tbody>
           {rows.map(r=>(
             <tr key={r.name}>
-              <td style={td}><a href={`${API_BASE}/api/quote-files/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(r.name)}`} target="_blank" rel="noreferrer">{r.name}</a></td>
+              <td style={td}>{(() => {
+                // Prefer backend-provided absolute URL (r.url). If it's relative, build absolute from API_BASE.
+                const BACKEND_ORIGIN = API_BASE || `${window.location.protocol}//${window.location.hostname}:4000`;
+                // If backend returned an absolute URL, only use it when it points to the same origin
+                // as the current page (or matches API_BASE). Otherwise fall back to the proxied API
+                // path (/api/quote-files/...) which the dev server will forward to the backend.
+                const pageOrigin = window.location.origin;
+                let href = '';
+                if (r && r.url && String(r.url).startsWith('http')) {
+                  try {
+                    const parsed = new URL(r.url);
+                    const apiBaseHost = (API_BASE && API_BASE.startsWith('http')) ? new URL(API_BASE).host : null;
+                    if (parsed.origin === pageOrigin || (apiBaseHost && parsed.host === apiBaseHost)) {
+                      href = r.url;
+                    }
+                  } catch (e) {
+                    href = '';
+                  }
+                }
+                if (!href) {
+                  const proxied = `${API_BASE || ''}/api/quote-files/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(r.name)}`;
+                  // If API_BASE is blank, make it relative so CRA dev proxy handles it
+                  href = (API_BASE ? proxied : `/api/quote-files/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(r.name)}`);
+                }
+                // Ensure localhost links use http scheme (dev server doesn't use TLS)
+                if (href.startsWith('https://localhost') || href.startsWith('https://127.0.0.1')) {
+                  href = href.replace(/^https:/, 'http:');
+                }
+                return (<a href={href} target="_blank" rel="noreferrer noopener">{r.name}</a>);
+              })()}</td>
               <td style={td}>{(r.size/1024).toFixed(1)} KB</td>
               <td style={td}>{new Date(r.modifiedAt).toLocaleString()}</td>
               <td style={tdRight}>

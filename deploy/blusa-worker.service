@@ -1,0 +1,12 @@
+[Unit]
+Description=BridgeLineUSA Quote Worker
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/bridgelineusa
+ExecStart=/usr/bin/node /opt/bridgelineusa/backend/src/workers/quoteSyncWorker.js
+Restart=always
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

@@ -3,8 +3,13 @@ import fs from 'fs/promises';
 import path from 'path';
 
 export const getQuotesRoot = () => {
+  // Prefer explicit env vars. If none provided, resolve against the current
+  // working directory (which is the backend folder when the server is started
+  // from the backend). Avoid hard-coding an extra 'backend' path segment which
+  // can lead to duplicated paths when process.cwd() is already the backend.
   const env = process.env.QUOTE_VAULT_ROOT || process.env.QUOTE_ROOT;
-  return path.resolve(env || path.join(process.cwd(), 'backend', 'data', 'quotes'));
+  if (env) return path.resolve(env);
+  return path.resolve(process.cwd(), './data/quotes');
 };
 
 const slug = (s) =>

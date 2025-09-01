@@ -19,3 +19,26 @@ export async function uploadOne(file) {
   }
   return res.json();
 }
+
+/**
+ * Upload multiple files to a quote-specific endpoint and subdir.
+ * @param {string} quoteNo
+ * @param {FileList|File[]} files
+ * @param {string} subdir
+ * @returns {Promise<Object>} response JSON from server (attachments/labels)
+ */
+export async function uploadFilesToQuote(quoteNo, files, subdir = 'uploads') {
+  if (!quoteNo) throw new Error('quoteNo required for quote-scoped uploads');
+  const fd = new FormData();
+  const arr = Array.from(files || []);
+  if (arr.length === 0) throw new Error('No files provided');
+  for (const f of arr) fd.append('files', f);
+
+  const url = `${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/upload?subdir=${encodeURIComponent(subdir)}`;
+  const res = await fetch(url, { method: 'POST', body: fd });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`Upload failed (${res.status}): ${txt}`);
+  }
+  return res.json();
+}

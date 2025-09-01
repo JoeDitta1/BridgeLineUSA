@@ -1,6 +1,7 @@
 // src/index.js
 import 'dotenv/config';
 import express from 'express';
+import https from 'https';
 import cors from 'cors';
 import path, { dirname } from 'path';
 import fs from 'fs';
@@ -16,8 +17,11 @@ import * as dbModule from './db.js';
 import customersRoute from './routes/customersRoute.js';
 import quoteInitRoute from './routes/quoteInitRoute.js';
 import adminRoute from './routes/adminRoute.js';
+import adminApiKeysRoutes from './routes/adminApiKeysRoutes.js';
 import equipmentRoute from './routes/equipmentRoute.js';
 import systemMaterialsRoute from './routes/systemMaterialsRoute.js';
+import aiRoutes from './routes/aiRoutes.js';
+import quotesBomRoutes from './routes/quotesBomRoutes.js';
 
 /* ------------------------- ES module __dirname shim ------------------------ */
 const __filename = fileURLToPath(import.meta.url);
@@ -67,6 +71,22 @@ CREATE TABLE IF NOT EXISTS quotes (
 );
 CREATE INDEX IF NOT EXISTS idx_quotes_date ON quotes(date);
 CREATE INDEX IF NOT EXISTS idx_quotes_customer ON quotes(customer_name);
+`);
+
+// BOM table used by quotes and AI accept endpoint
+db.exec?.(`
+CREATE TABLE IF NOT EXISTS quote_bom (
+  id INTEGER PRIMARY KEY,
+  quote_id INTEGER,
+  material TEXT,
+  size TEXT,
+  grade TEXT,
+  thickness_or_wall TEXT,
+  length TEXT,
+  qty INTEGER,
+  unit TEXT,
+  notes TEXT
+);
 `);
 
 function ensureColumn(table, col, typeDefault) {
@@ -151,6 +171,32 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 const quoteEnv = (process.env.QUOTE_VAULT_ROOT || process.env.QUOTE_ROOT || './data/quotes');
 const QUOTES_FILES_ROOT = resolveFromBackend(quoteEnv);
 await fsPromises.mkdir(QUOTES_FILES_ROOT, { recursive: true });
+
+// Download-aware route: if client requests ?download=1, force Content-Disposition attachment
+// This sits before the static middleware so we can override inline display when desired.
+app.get('/files/*', async (req, res, next) => {
+  try {
+    if (!req.query || String(req.query.download || '') !== '1') return next();
+    // Compute the local file path from the URL: /files/<...>
+    const rel = req.path.replace(/^\/files\//, '');
+    // decode in case filenames are encoded
+    const decoded = decodeURIComponent(rel);
+    const full = path.join(QUOTES_FILES_ROOT, decoded);
+    // prevent path traversal
+    if (!full.startsWith(QUOTES_FILES_ROOT)) return res.status(400).send('Invalid path');
+    try {
+      await fsPromises.access(full);
+    } catch (e) {
+      return res.status(404).send('Not found');
+    }
+    // Let Express set headers and stream the file as an attachment
+    return res.download(full, path.basename(full));
+  } catch (e) {
+    console.error('[files download] error:', e && e.message ? e.message : e);
+    return res.status(500).send('Server error');
+  }
+});
+
 app.use('/files', express.static(QUOTES_FILES_ROOT));
 
 // Expose resolved paths to routes if needed
@@ -167,8 +213,13 @@ app.use('/api/quotes', quotesRoute);
 app.use('/api/quotes', quoteInitRoute);
 app.use('/api/settings', settingsRoute); // <— mounted (was imported but not used)
 app.use('/api/admin', adminRoute); // admin endpoints
+app.use('/api/admin', adminApiKeysRoutes); // admin API key management
 app.use('/api/equipment', equipmentRoute); // equipment endpoints
 app.use('/api/system-materials', systemMaterialsRoute);
+
+// AI routes
+app.use('/api', aiRoutes);
+app.use('/api', quotesBomRoutes);
 
 // File routes mounted under /api/quotes to match frontend expectations
 app.use('/api/quotes', quoteFilesRoute);
@@ -254,8 +305,33 @@ app.get('/', (_req, res) => {
 });
 
 /* --------------------------------- Start --------------------------------- */
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+// Start server: HTTP by default, or HTTPS in dev when DEV_HTTPS=true
+const DEV_HTTPS = String(process.env.DEV_HTTPS || '').toLowerCase() === '1' || String(process.env.DEV_HTTPS || '').toLowerCase() === 'true';
+const HTTPS_CERT = process.env.DEV_HTTPS_CERT || path.join(BACKEND_ROOT, 'ssl', 'dev.crt');
+const HTTPS_KEY = process.env.DEV_HTTPS_KEY || path.join(BACKEND_ROOT, 'ssl', 'dev.key');
+
+function logServerReady(proto) {
+  console.log(`Server is running on ${proto}://localhost:${PORT}`);
   console.log(`Uploads: ${UPLOADS_DIR}`);
   console.log(`Quote folders: ${QUOTES_FILES_ROOT}`);
-});
+}
+
+if (DEV_HTTPS) {
+  try {
+    // read cert/key synchronously at startup
+    const cert = fs.readFileSync(HTTPS_CERT);
+    const key = fs.readFileSync(HTTPS_KEY);
+    https.createServer({ key, cert }, app).listen(PORT, '0.0.0.0', () => {
+      logServerReady('https');
+      console.log('[Dev TLS] Using cert:', HTTPS_CERT);
+    });
+  } catch (e) {
+    console.error('[Dev TLS] Failed to start HTTPS server:', e && e.message ? e.message : e);
+    console.error('[Dev TLS] Make sure cert/key exist or set DEV_HTTPS=false to run HTTP only.');
+    process.exit(1);
+  }
+} else {
+  app.listen(PORT, '0.0.0.0', () => {
+    logServerReady('http');
+  });
+}

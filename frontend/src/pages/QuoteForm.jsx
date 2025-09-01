@@ -1,32 +1,82 @@
-﻿// src/pages/QuoteForm.jsx
-import React, { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import Select from 'react-select';
 import UploadButton from '../components/UploadButton';
-import { API_BASE } from "../api/base";
+import * as priceHistory from '../utils/priceHistory';
+import jfetch from '../lib/jfetch';
 
-/* --------------------------------- Helpers --------------------------------- */
+// Safe wrappers (fall back to local storage map if module binding isn't available at runtime)
+const getLastPrice = (args) => (priceHistory.getLastPrice ? priceHistory.getLastPrice(args) : (loadPriceMap()[priceKey({ family: args.category, description: args.description, unit: args.unit, grade: args.grade, domestic: args.domesticOnly })] || null));
+const setLastPrice = (args, payload) => (priceHistory.setLastPrice ? priceHistory.setLastPrice(args, payload) : savePriceMap({ ...(loadPriceMap()), [priceKey({ family: args.category, description: args.description, unit: args.unit, grade: args.grade, domestic: args.domesticOnly })]: payload }));
 
-// Last-used price memory (keyed by unit + grade + domestic)
+// IMPORTANT: point this at your backend (Node/Express) which will talk to Supabase server-side.
+// In development we prefer relative paths so CRA dev-server proxy ("proxy" in package.json)
+// forwards `/api` requests to the backend running in the container. Set
+// `REACT_APP_API_BASE` in env to override (for production or remote hosts).
+const API_BASE = process.env.REACT_APP_API_BASE || '';
+
+/* ------------------------------- Local memory ------------------------------- */
+
 const PRICE_KEY = 'scm_price_history_v2';
 const loadPriceMap = () => { try { return JSON.parse(localStorage.getItem(PRICE_KEY) || '{}'); } catch { return {}; } };
 const savePriceMap = (m) => localStorage.setItem(PRICE_KEY, JSON.stringify(m));
-const priceKey = ({ category, description, unit, grade, domestic }) =>
-  [String(category||'').toUpperCase(), String(description||'').toUpperCase(), unit, String(grade||'').toUpperCase(), domestic ? 'DOM' : 'ANY'].join('|');
-const getLastPrice = (p) => loadPriceMap()[priceKey(p)] || null;
-const setLastPrice = (p, payload) => { const m = loadPriceMap(); m[priceKey(p)] = { ...payload, updatedAt: Date.now() }; savePriceMap(m); };
+const priceKey = ({ family, description, unit, grade, domestic }) =>
+  [String(family||'').toUpperCase(), String(description||'').toUpperCase(), String(unit||'').toUpperCase(), String(grade||''), String(!!domestic)].join('|');
 
-// Part index (local)
+// Parts index (local) — used to remember recently used Part / Drawing numbers
 const PARTS_KEY = 'scm_parts_index_v1';
 const loadPartsIndex = () => { try { return JSON.parse(localStorage.getItem(PARTS_KEY) || '[]'); } catch { return []; } };
 const savePartsIndex = (arr) => localStorage.setItem(PARTS_KEY, JSON.stringify(arr));
 
-/* ------------------------------- Static Options ------------------------------ */
+/* --------------------------------- Helpers --------------------------------- */
+
+// Formats tolerance like "±0.125 in"
+const fmtTol = (tol) => (tol?.symbol || '±') + (tol?.value ?? 0.125) + ' ' + (tol?.unit || 'in');
+
+// crude weight calculators (replace with your authoritative logic as needed)
+const toNumber = (v, d=0) => (v === '' || v === undefined || v === null || isNaN(Number(v))) ? d : Number(v);
+
+// Common U/M options (you can extend these; the “unit_type” determines how we weigh)
+const UM_OPTIONS = [
+  { value: 'EA', label: 'Each', unit_type: 'each' },
+  { value: 'FT', label: 'Feet', unit_type: 'length' },
+  { value: 'IN', label: 'Inches', unit_type: 'length' },
+  { value: 'LB', label: 'Pounds', unit_type: 'weight' },
+  { value: 'SQFT', label: 'Sq Ft', unit_type: 'area' },
+];
+
+// Default tolerances
+const DEFAULT_TOL = { symbol: '±', value: 0.125, unit: 'in' };
+
+// Simple unit type labels used in some UI selects
 const unitTypes = ['Per Foot', 'Each', 'Sq In'];
-const processCatalog = ['Laser Cutting','Grinding','Drilling','Forming','Saw Cutting','Torch Cutting','Fitting','Welding','Sandblast','Paint','Beveling','Machining'];
-const outsourcingCatalog = ['Machining','External Painting','Heat Treating','NDE','Other'];
-const qualityOptions = ['None','ISO 9001','ASME','UL508a','AWS B31.1','AWS B31.3'];
-const ndeOptions = ['RT 5%','RT 10%','RT 100%','PT','MT','UT','VT','Hydro 100%'];
+
+// Small inline component to edit length value/unit and tolerances
+function LengthWithUnitAndTol({ row = {}, onChange }) {
+  const lv = row.length_value ?? row.length ?? '';
+  const lu = row.length_unit || 'ft';
+  const tolPlus = row.tol_plus ?? DEFAULT_TOL.value;
+  const tolMinus = row.tol_minus ?? DEFAULT_TOL.value;
+  const tolUnit = row.tol_unit || (row.length_unit || 'ft');
+
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <input type="number" value={lv} onChange={e => onChange({ length_value: e.target.value })} style={{ width: 80 }} />
+      <select value={lu} onChange={e => onChange({ length_unit: e.target.value })}>
+        <option value="ft">ft</option>
+        <option value="in">in</option>
+        <option value="m">m</option>
+      </select>
+      <input type="number" step="0.001" value={tolPlus} onChange={e => onChange({ tol_plus: parseFloat(e.target.value) })} style={{ width: 80 }} />
+      <input type="number" step="0.001" value={tolMinus} onChange={e => onChange({ tol_minus: parseFloat(e.target.value) })} style={{ width: 80 }} />
+      <select value={tolUnit} onChange={e => onChange({ tol_unit: e.target.value })}>
+        <option value="in">in</option>
+        <option value="ft">ft</option>
+        <option value="mm">mm</option>
+      </select>
+    </div>
+  );
+}
 
 /* ----------------------- Family aliases / normalization ---------------------- */
 const FAMILY_ALIASES = {
@@ -63,12 +113,33 @@ const FAMILY_ALIASES = {
   'copper': 'Copper',
   'brass': 'Brass',
 };
+
+// Normalize a family/type string to a canonical label using aliases or title-casing.
 const normalizeFamily = (s) => {
   if (!s) return '';
   const k = String(s).trim().toLowerCase();
-  return FAMILY_ALIASES[k] || FAMILY_ALIASES[k.replace(/\s+/g, ' ')] || s;
+  if (!k) return '';
+  if (FAMILY_ALIASES[k]) return FAMILY_ALIASES[k];
+  // Basic cleanup: collapse whitespace and title-case unknown families
+  const cleaned = k.replace(/\s+/g, ' ').trim();
+  return cleaned.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 };
 
+// Single source of truth for Plate detection
+const isPlateFamily = (family) => normalizeFamily(family).toLowerCase() === 'plate';
+
+// quick money helpers
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// Convert inches/feet helpers
+const inToFt = (inches) => inches / 12;
+const ftToIn = (feet) => feet * 12;
+
+/* ----------------------------------------------------------------------------
+   QuoteForm
+---------------------------------------------------------------------------- */
+
+// Removed smaller component: the full, primary QuoteForm component is defined later in this file.
 /* -------------------------- Grade options by family -------------------------- */
 const gradeOptionsByFamily = {
   Pipe: [
@@ -103,6 +174,22 @@ const gradeOptionsByFamily = {
   'W-Beam': ['A992','A36'],
   'HSS': ['A500 Gr B','A500 Gr C'],
 };
+
+
+
+/* -------------------------- Quality / inspection options -------------------------- */
+const qualityOptions = [
+  'ISO 9001',
+  'ASME',
+  'UL508a',
+  'AWS B31.1',
+  'AWS B31.3'
+];
+
+/* -------------------------- Process & Outsourcing catalogs -------------------------- */
+// Small default lists used by the BOM UI. Kept local to the page for simplicity.
+const processCatalog = ['Laser Cutting','Grinding','Drilling','Forming','Saw Cutting','Torch Cutting','Fitting','Welding','Sandblast','Paint','Beveling','Machining'];
+const outsourcingCatalog = ['Plasma Cutting','Laser Cutting Service','CNC Machining','Anodizing','Galvanizing','Powder Coat','Heat Treat','Welding Shop','Waterjet'];
 
 /* -------------------- Sheet gauge table (steel, inches) --------------------- */
 const SHEET_GAUGE_IN = {
@@ -294,29 +381,42 @@ const augmentOption = (o) => {
 
 /* ======================= Save helpers for backend ======================= */
 async function saveQuoteAPI(payload) {
-  const res = await fetch(`${API_BASE}/api/quotes`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      quote_no: payload.quote_no || undefined,
-      customer_name: payload.customer_name,
-      date: payload.date,
-      description: payload.description ?? null,
-      requested_by: payload.requested_by ?? null,
-      estimator: payload.estimator ?? null,
-      status: payload.status ?? 'Draft',
-      sales_order_no: payload.sales_order_no ?? null,
-      rev: Number.isFinite(payload.rev) ? payload.rev : 0
-    }),
-  });
-  const text = await res.text();
+  // Use jfetch (defensive): it throws on non-2xx and parses JSON safely.
   let data = {};
-  try { data = text ? JSON.parse(text) : {}; } catch (e) {
-    throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
+  try {
+    data = await jfetch(`${API_BASE}/api/quotes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        quote_no: payload.quote_no || undefined,
+        customer_name: payload.customer_name,
+        date: payload.date,
+        description: payload.description ?? null,
+        requested_by: payload.requested_by ?? null,
+        estimator: payload.estimator ?? null,
+        status: payload.status ?? 'Draft',
+        sales_order_no: payload.sales_order_no ?? null,
+        rev: Number.isFinite(payload.rev) ? payload.rev : 0
+      }),
+    });
+  } catch (e) {
+    // Re-throw with clearer context
+    throw new Error(`Save quote failed: ${e.message}`);
   }
-  if (!res.ok || data.ok === false) {
-    throw new Error(data?.detail || data?.error || `Save failed (${res.status})`);
+
+  // Normalize common server shapes: some endpoints return { ok:true, quote: { ... } }
+  try {
+    const nested = data?.quote;
+    const nestedQuoteNo = nested?.quote_no || nested?.quoteNo || nested?.quote_no;
+    if (!data.quote_no && nestedQuoteNo) {
+      data.quote_no = nestedQuoteNo;
+    }
+    // also support camelCase top-level sometimes used elsewhere
+    if (!data.quote_no && data?.quoteNo) data.quote_no = data.quoteNo;
+  } catch (e) {
+    // noop
   }
+
   return data;
 }
 
@@ -333,35 +433,36 @@ async function saveQuoteMetaAPI({ meta, rows, nde }, status = 'draft') {
     appState: { meta, rows, nde },
   };
 
-  const res = await fetch(`${API_BASE}/api/quotes/save`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const text = await res.text();
-  if (res.status === 404) {
-    return { ok: true, skipped: true };
+  // Use jfetch but preserve 404 behavior (skip)
+  try {
+    const data = await jfetch(`${API_BASE}/api/quotes/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return data;
+  } catch (e) {
+    // jfetch throws on non-2xx — treat 404 as skipped (backwards-compatible)
+    if (String(e.message).includes('HTTP 404')) return { ok: true, skipped: true };
+    throw new Error(`Save meta failed: ${e.message}`);
   }
-  let data = {};
-  try { data = text ? JSON.parse(text) : {}; } catch (e) {
-    throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
-  }
-  if (!res.ok || data.ok === false) {
-    throw new Error(data?.detail || data?.error || `Save failed (${res.status})`);
-  }
-  return data; // { ok, quoteNo, customerName, metaPath, quoteDir }
 }
 
 /** NEW: Initialize folder tree (idempotent). */
 async function initFoldersAPI({ quoteNo, customerName, description }) {
   if (!quoteNo || !customerName) return null;
-  const res = await fetch(`${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/init-folders`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customer_name: customerName, description: description || '' }),
-    credentials: 'include',
-  });
-  return res.ok ? res.json() : null;
+  try {
+    return await jfetch(`${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/init-folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_name: customerName, description: description || '' }),
+      credentials: 'include',
+    });
+  } catch (e) {
+    // best-effort idempotent init; swallow errors and return null
+    console.warn('initFoldersAPI failed:', e.message);
+    return null;
+  }
 }
 
 /* ================================== App ================================== */
@@ -416,16 +517,14 @@ export default function QuoteForm() {
     (async () => {
       if (!routeQuoteNo) return;
       try {
-        const resp = await fetch(`${API_BASE}/api/quotes/${encodeURIComponent(routeQuoteNo)}/meta`);
-        const text = await resp.text();
-        let json;
-        try { json = text ? JSON.parse(text) : {}; } catch (e) {
-          throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
-        }
-        if (!resp.ok || json.ok === false) throw new Error(json.error || 'Failed to load quote meta');
-
-        const form = json?.meta?.form || {};
-        const app = form.appState || {};
+        const json = await jfetch(`${API_BASE}/api/quotes/${encodeURIComponent(routeQuoteNo)}/meta`);
+        if (json.ok === false) throw new Error(json.error || 'Failed to load quote meta');
+  const form = json?.meta?.form || {};
+  // Support two shapes: older saves put appState at `form.appState`,
+  // newer saves wrote the app state directly under `form` (meta/rows/nde).
+  const app = form.appState || form || {};
+  // Debug info to help diagnose blank hydrations in the browser
+  try { console.debug('[QuoteForm hydrate] json:', json); console.debug('[QuoteForm hydrate] app:', app); } catch (e) {}
         if (!active) return;
 
         if (app.meta) setMeta(prev => ({ ...prev, ...app.meta, quoteNo: routeQuoteNo }));
@@ -469,12 +568,7 @@ export default function QuoteForm() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/materials`);
-        const text = await res.text();
-        let rowsRaw;
-        try { rowsRaw = text ? JSON.parse(text) : []; } catch (e) {
-          throw new Error(`Unexpected server response: ${text.slice(0, 120)}`);
-        }
+        const rowsRaw = await jfetch(`${API_BASE}/api/materials`);
 
         // 1) Client-generated Plate — tag as 'generic-plate'
         const genericPlateOptions = buildPlateOptions().map(o => ({
@@ -518,7 +612,7 @@ export default function QuoteForm() {
         ];
 
         setMaterialOptions(groupedOptions);
-      } catch {
+  } catch (err) {
         // fallback: only client-side generated plates & sheets
         const genericPlateOptions = buildPlateOptions().map(o => ({ ...o, source: 'generic-plate', group: 'Generic Plate (Thickness Catalog)' }));
         const sheetOptions = buildSheetOptions().map(o => ({ ...o, source: 'generic-sheet', group: 'Materials Catalog (from JSON)' }));
@@ -604,7 +698,19 @@ export default function QuoteForm() {
     const unit = r.unitType;
 
     const qty = Math.max(0, num(r.qty));
-    const lenFt = num(r.lengthFt);
+    // Support multiple length fields: legacy `lengthFt` or newer `length_value` with `length_unit`.
+    const lengthValueToFeet = (row) => {
+      const lf = num(row.lengthFt);
+      if (lf > 0) return lf;
+      const lv = num(row.length_value);
+      if (lv <= 0) return 0;
+      const lu = (row.length_unit || 'ft').toString().toLowerCase();
+      if (lu === 'in' || lu === '"' ) return inToFt(lv);
+      if (lu === 'ft' || lu === "'") return lv;
+      if (lu === 'm' || lu === 'meter' || lu === 'metre') return lv * 3.28084;
+      return lv; // assume feet fallback
+    };
+    const lenFt = lengthValueToFeet(r);
     const wpf = num(m?.weight_per_ft);
 
     const wpsqi = (num(m?.weight_per_sqin) || (m?.thicknessIn && m?.density ? Number((m.thicknessIn * m.density).toFixed(6)) : 0));
@@ -790,22 +896,8 @@ export default function QuoteForm() {
       const result = await saveQuoteMetaAPI({ meta: { ...meta, quoteNo: effectiveQuoteNo }, rows, nde }, status);
       effectiveQuoteNo = result.quoteNo || result.quote_no || effectiveQuoteNo;
 
-      // Ensure the folder tree exists for this quote (customer + SCM-... + subfolders)
-      try {
-        if (effectiveQuoteNo) {
-          await fetch(`${API_BASE}/api/quotes/${encodeURIComponent(effectiveQuoteNo)}/init-folders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              customer_name: meta.customerName,
-              description: meta.description || ''
-            }),
-          });
-        }
-      } catch (e) {
-        console.warn('Init folders failed:', e);
-      }
-
+      // Ensure the folder tree exists for this quote (idempotent).
+      // Use the shared helper once to avoid duplicate requests.
       try {
         await initFoldersAPI({
           quoteNo: effectiveQuoteNo,
@@ -824,7 +916,7 @@ export default function QuoteForm() {
       if (goto === 'files' && effectiveQuoteNo) {
         navigate(`/quotes/${encodeURIComponent(effectiveQuoteNo)}/files`);
       } else if (goto === 'log') {
-        navigate('/quotes');
+        navigate('/quotes/log');
       } else {
         alert(`${status === 'final' ? 'Finalized' : 'Saved'}: ${effectiveQuoteNo}`);
       }
@@ -856,6 +948,10 @@ export default function QuoteForm() {
   /* --------------------------------- Render --------------------------------- */
   return (
     <div style={container}>
+      <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginBottom:10 }}>
+        <button style={button} onClick={() => navigate('/dashboard')}>← Dashboard</button>
+        <button style={button} onClick={() => navigate('/quotes/log')}>← Quote Log</button>
+      </div>
       {/* ============================== STEP 1 ============================== */}
       {step === 1 && (
         <div style={card}>
@@ -885,8 +981,19 @@ export default function QuoteForm() {
                 quoteNo={meta.quoteNo || routeQuoteNo || ''}
                 subdir="uploads"
                 onUploaded={(items) => {
-                  // items: [{ originalname, size, subdir, path, url }]
-                  setUploads(prev => [...items, ...prev]);
+                  // Defensive: ensure items is an array before merging
+                  const list = Array.isArray(items) ? items : (items ? [items] : []);
+                  setUploads(prev => [...list, ...prev]);
+                }}
+              />
+              {/* Quick drawings uploader — saves into Quote Form/Drawings */}
+              <UploadButton
+                quoteNo={meta.quoteNo || routeQuoteNo || ''}
+                subdir="drawings"
+                onUploaded={(items) => {
+                  // merge drawings into uploads list too (they're attachments)
+                  const list = Array.isArray(items) ? items : (items ? [items] : []);
+                  setUploads(prev => [...list, ...prev]);
                 }}
               />
             </div>
@@ -909,15 +1016,35 @@ export default function QuoteForm() {
                       padding: '6px 10px'
                     }}
                   >
-                    <a
-                      href={u.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ textDecoration: 'none', color: '#111' }}
-                      title="Open uploaded file"
-                    >
-                      {u.originalname}
-                    </a>
+                    {(() => {
+                      const pageOrigin = window.location.origin;
+                      let href = '';
+                      if (u?.url && String(u.url).startsWith('http')) {
+                        try {
+                          const parsed = new URL(u.url);
+                          const apiBaseHost = (API_BASE && API_BASE.startsWith('http')) ? new URL(API_BASE).host : null;
+                          if (parsed.origin === pageOrigin || (apiBaseHost && parsed.host === apiBaseHost)) href = u.url;
+                        } catch (e) { href = ''; }
+                      }
+                      if (!href) {
+                        // fallback proxied path so CRA dev-server will forward to backend in dev
+                        href = API_BASE ? `${API_BASE}/api/quote-files/${encodeURIComponent(meta.quoteNo || routeQuoteNo)}/files/${encodeURIComponent(u.name || u.filename || '')}` : `/api/quote-files/${encodeURIComponent(meta.quoteNo || routeQuoteNo)}/files/${encodeURIComponent(u.name || u.filename || '')}`;
+                      }
+                      if (href.startsWith('https://localhost') || href.startsWith('https://127.0.0.1')) {
+                        href = href.replace(/^https:/, 'http:');
+                      }
+                      return (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          style={{ textDecoration: 'none', color: '#111' }}
+                          title="Open uploaded file"
+                        >
+                          {u.originalname || u.name}
+                        </a>
+                      );
+                    })()}
                     <button
                       type="button"
                       onClick={() => setUploads(prev => prev.filter((_, i) => i !== idx))}
@@ -1026,7 +1153,37 @@ export default function QuoteForm() {
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <h2 style={sectionTitle}>Step 2 — Bill of Materials & Operations</h2>
             <div style={{ display:'flex', gap:8 }}>
-              <button style={button} title="Search with embedded AI (placeholder)">AI Material Search</button>
+              <button
+                style={button}
+                title="Generate BOM suggestions from quote attachments using AI"
+                onClick={async () => {
+                  const qid = (meta && meta.quoteNo) || routeQuoteNo || '';
+                  const suggestions = await aiExtractBom(qid);
+                  if (Array.isArray(suggestions) && suggestions.length) {
+                    // Map suggestions into accept shape, preserving length/tolerance if present
+                    const payload = suggestions.map(s => ({
+                      material: s.material || '',
+                      size: s.size || '',
+                      grade: s.grade || '',
+                      thickness_or_wall: s.thickness_or_wall || '',
+                      length_value: s.length_value ?? s.length ?? '',
+                      length_unit: s.length_unit || 'ft',
+                      tol_plus: s.tol_plus ?? '',
+                      tol_minus: s.tol_minus ?? '',
+                      tol_unit: s.tol_unit || s.length_unit || 'ft',
+                      qty: s.qty || 1,
+                      unit: s.unit || 'Each',
+                      notes: s.notes || ''
+                    }));
+                    await acceptBomRows(qid, payload);
+                    window.alert('AI suggestions added. Refresh BOM list.');
+                  } else {
+                    window.alert('No AI suggestions returned.');
+                  }
+                }}
+              >
+                AI BOM from Drawings
+              </button>
               <button style={button} onClick={addRow}>+ Add Item</button>
             </div>
           </div>
@@ -1086,7 +1243,16 @@ export default function QuoteForm() {
                           filterOption={filterOption}
                         />
                       </div>
-                      <button style={button} title="AI material search for bearings/hardware/etc. (placeholder)">AI</button>
+                      <button
+                        style={button}
+                        title="AI material search for this row"
+                        onClick={async () => {
+                          const qid = (meta && meta.quoteNo) || routeQuoteNo || '';
+                          await handleAiMaterialForRow(ridx, qid, (m)=>window.alert(m));
+                        }}
+                      >
+                        AI
+                      </button>
                     </div>
                   </div>
 
@@ -1167,8 +1333,8 @@ export default function QuoteForm() {
                     {r.unitType === 'Per Foot' && (
                       <div style={grid3}>
                         <div>
-                          <div style={label}>Length (ft)</div>
-                          <input style={input} value={r.lengthFt} onChange={e=>setRow(i,{ lengthFt:e.target.value })} />
+                          <div style={label}>Length + Unit + Tol</div>
+                          <LengthWithUnitAndTol row={r} onChange={(patch) => setRow(i, patch)} />
                         </div>
                         <div>
                           <div style={label}>Qty</div>

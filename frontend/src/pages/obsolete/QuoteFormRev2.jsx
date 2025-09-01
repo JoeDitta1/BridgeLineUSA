@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Select from 'react-select';
 import UploadButton from '../components/UploadButton';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+const API_BASE = process.env.REACT_APP_API_BASE || '';
 
 /* --------------------------------- Helpers --------------------------------- */
 
@@ -782,8 +782,10 @@ export default function QuoteForm() {
                 quoteNo={meta.quoteNo || routeQuoteNo || ''}
                 subdir="uploads"
                 onUploaded={(items) => {
-                  // items: [{ originalname, size, subdir, path, url }]
-                  setUploads(prev => [...items, ...prev]);
+                  // Normalize legacy/single responses to an array before merging.
+                  const list = Array.isArray(items) ? items : (items ? [items] : []);
+                  if (list.length === 0) return;
+                  setUploads(prev => [...list, ...prev]);
                 }}
               />
             </div>

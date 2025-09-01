@@ -152,6 +152,50 @@ router.get('/', (req, res) => {
   }
 });
 
+/**
+ * GET /api/quotes/:quoteNo/meta
+ * Return the saved _meta.json (if present) for a given quote number.
+ */
+router.get('/:quoteNo/meta', async (req, res) => {
+  try {
+    const quoteNo = req.params.quoteNo;
+    if (!quoteNo) return res.status(400).json({ ok: false, error: 'quoteNo required' });
+
+    // Lookup customer name from DB
+    const row = db.prepare('SELECT customer_name, description FROM quotes WHERE quote_no = ?').get(quoteNo);
+    if (!row || !row.customer_name) return res.status(404).json({ ok: false, error: 'Quote not found' });
+
+    const customerSafe = slug(row.customer_name || 'unknown');
+    const customerDir = path.join(VAULT_ROOT, customerSafe);
+
+    // Find folder that starts with the quoteNo (handles revisions)
+    const dirs = await listDirs(customerDir);
+    const match = dirs.find(d => d === quoteNo || d.startsWith(`${quoteNo}-`));
+    if (!match) return res.status(404).json({ ok: false, error: 'Quote folder not found' });
+
+    const quoteDir = path.join(customerDir, match);
+    const metaCandidates = [
+      path.join(quoteDir, 'Quote Form', '_meta.json'),
+      path.join(quoteDir, '_meta.json')
+    ];
+
+    for (const p of metaCandidates) {
+      try {
+        const txt = await fsPromises.readFile(p, 'utf8');
+        const json = JSON.parse(txt || '{}');
+        return res.json({ ok: true, meta: json });
+      } catch (e) {
+        // try next
+      }
+    }
+
+    return res.status(404).json({ ok: false, error: 'Meta not found' });
+  } catch (err) {
+    console.error('Error reading meta:', err);
+    res.status(500).json({ ok: false, error: String(err?.message || err) });
+  }
+});
+
 /* ----------------------------- Route: GET by ID ---------------------------- */
 router.get('/:id', (req, res) => {
   try {
@@ -387,24 +431,142 @@ router.post('/:id/archive', async (req, res) => {
 // Move the /save-meta handler logic into a named async function
 async function saveMeta(req, res) {
   try {
+  const idemKey = req.get('X-Idempotency-Key') || req.body?.idempotency_key || null;
     const b = req.body || {};
-    // ...existing logic for saving meta...
-    // Example placeholder for the original logic:
-    // const result = ... (your DB insert/update logic here)
-    // For demonstration, let's assume result is the saved/updated quote row
 
-    // ...existing code for DB insert/update...
-    // After the DB insert/update succeeds:
-    const quoteNo = b.quote_no || b.quoteNo || result?.quote_no;
-    const customerName = b.customer_name || b.customer || b.customerName || result?.customer_name;
-    const description = b.description || result?.description || '';
-    if (quoteNo && customerName) {
-      await ensureQuoteFolders({ customerName, quoteNo, description });
+    // Normalize incoming payload keys (support front-end variants)
+    const quoteNoIn = (b.quoteNo || b.quote_no || b.quote || '').toString().trim() || undefined;
+    const customerName = (b.customerName || b.customer_name || b.customer || '').toString().trim();
+    const description = (b.description || '').toString();
+    const date = (b.date || new Date().toISOString().slice(0, 10)).toString();
+    const status = (b.status || 'Draft').toString();
+    const rev = Number.isFinite(+b.rev) ? +b.rev : 0;
+
+    if (!customerName) return res.status(400).json({ ok: false, error: 'customer_name required' });
+
+    // Upsert quote row: if quote_no provided, try update; else INSERT new and return generated quote_no
+    let finalQuoteNo = quoteNoIn;
+    if (!finalQuoteNo) {
+      // Generate next quote number
+      finalQuoteNo = getNextQuoteNo();
+      const stmt = db.prepare(`INSERT INTO quotes (quote_no, customer_name, description, requested_by, estimator, date, status, sales_order_no, rev) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      const info = stmt.run(finalQuoteNo, customerName, description || null, b.requested_by || null, b.estimator || null, date, status, b.sales_order_no || null, rev);
+      // Fetch created row
+    } else {
+      // If exists, update; otherwise insert with provided quote_no
+      const existing = db.prepare('SELECT id FROM quotes WHERE quote_no = ?').get(finalQuoteNo);
+      if (existing) {
+        db.prepare(`UPDATE quotes SET customer_name = ?, description = ?, requested_by = ?, estimator = ?, date = ?, status = ?, sales_order_no = ?, rev = ? WHERE quote_no = ?`).run(
+          customerName, description || null, b.requested_by || null, b.estimator || null, date, status, b.sales_order_no || null, rev, finalQuoteNo
+        );
+      } else {
+        db.prepare(`INSERT INTO quotes (quote_no, customer_name, description, requested_by, estimator, date, status, sales_order_no, rev) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+          finalQuoteNo, customerName, description || null, b.requested_by || null, b.estimator || null, date, status, b.sales_order_no || null, rev
+        );
+      }
     }
 
-    // ...existing code for response...
+    const saved = db.prepare('SELECT * FROM quotes WHERE quote_no = ?').get(finalQuoteNo);
+
+    // Ensure folder tree
+    try {
+      await ensureQuoteFolders({ customerName, quoteNo: finalQuoteNo, description: description || '' });
+    } catch (e) {
+      console.warn('ensureQuoteFolders warning:', e?.message || e);
+    }
+
+    // Optional: If an idempotency key is present, check for an existing saved revision
+    try {
+      if (idemKey) {
+        const existingRev = db.prepare('SELECT * FROM quote_revisions WHERE idempotency_key = ?').get(idemKey);
+        if (existingRev) {
+          return res.json({ ok: true, quoteNo: finalQuoteNo, customerName, revision: existingRev.version, existing: true });
+        }
+      }
+    } catch (e) {
+      console.warn('idem check failed:', e?.message || e);
+    }
+
+    // Write _meta.json under Quote Form folder for client-side hydration
+    try {
+  const customerSafe = slug(customerName) || 'unknown';
+  const baseName = `${finalQuoteNo}-${slug(description || '')}`.replace(/-$/, '');
+  const customerDir = path.join(VAULT_ROOT, customerSafe);
+  // Find existing folder (handles revisions like -rev-2) or fall back to baseName
+  const dirs = await listDirs(customerDir);
+  const match = dirs.find((d) => d === baseName || d === finalQuoteNo || d.startsWith(`${finalQuoteNo}-`));
+  const folderName = match || baseName;
+  const quoteDir = path.join(customerDir, folderName);
+  const quoteFormDir = path.join(quoteDir, 'Quote Form');
+  await ensureDir(quoteFormDir);
+      const metaPath = path.join(quoteFormDir, '_meta.json');
+      const form = {
+        saved_at: new Date().toISOString(),
+        quote: saved,
+        form: b.appState || { appState: b.appState || b }
+      };
+      await fsPromises.writeFile(metaPath, JSON.stringify(form, null, 2), 'utf8');
+
+      // Record a new revision row (if revisions table present)
+      try {
+        const qrow = db.prepare('SELECT id,quote_no FROM quotes WHERE quote_no = ?').get(finalQuoteNo);
+        if (qrow) {
+          // determine version number
+          const last = db.prepare('SELECT MAX(version) as v FROM quote_revisions WHERE quote_id = ?').get(qrow.id);
+          const nextVer = (last?.v || 0) + 1;
+          db.prepare(`INSERT INTO quote_revisions (quote_id, version, label, storage_key_json, snapshot_json, created_at, idempotency_key) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)`)
+            .run(qrow.id, nextVer, description || null, null, JSON.stringify(form), idemKey);
+        }
+      } catch (revErr) {
+        console.warn('Failed to write quote_revisions row:', revErr?.message || revErr);
+      }
+
+      // Try to write small marker files and a manifest to Supabase storage (best-effort)
+      try {
+        const sup = await import('../lib/supabaseClient.js');
+        const getSupabase = sup.default ?? sup.getSupabase ?? sup;
+        const supa = getSupabase();
+        if (supa) {
+          const bucket = process.env.SUPABASE_QUOTES_BUCKET || 'quotes';
+          const customerSafe = slug(customerName || 'unknown');
+          const basePath = `quotes/${customerSafe}/${finalQuoteNo}`;
+          const formDirKey = `${basePath}/00-Quote-Form`;
+          // .keep markers
+          try {
+            await supa.storage.from(bucket).upload(`${basePath}/.keep`, Buffer.from(''), { upsert: true, contentType: 'application/octet-stream' });
+            await supa.storage.from(bucket).upload(`${formDirKey}/.keep`, Buffer.from(''), { upsert: true, contentType: 'application/octet-stream' });
+          } catch (e) {
+            // ignore
+          }
+          // manifest placeholder
+          try {
+            const manifestKey = `${formDirKey}/manifest.json`;
+            const manifest = { latest_version: null, files: [] };
+            await supa.storage.from(bucket).upload(manifestKey, Buffer.from(JSON.stringify(manifest, null, 2)), { upsert: true, contentType: 'application/json' });
+          } catch (e) {
+            // ignore
+          }
+        }
+      } catch (sErr) {
+        // ignore supabase failures, it's best-effort
+      }
+
+  // enqueue sync job (non-blocking)
+      try {
+        const insert = db.prepare('INSERT INTO quote_sync_queue (quote_no, customer_name, quote_dir, meta_path, payload_json) VALUES (?, ?, ?, ?, ?)');
+        insert.run(finalQuoteNo, customerName, quoteDir, metaPath, JSON.stringify(form));
+      } catch (qe) {
+        console.warn('Failed to enqueue quote sync job:', qe?.message || qe);
+      }
+
+      return res.json({ ok: true, quoteNo: finalQuoteNo, customerName, metaPath, quoteDir });
+    } catch (e) {
+      console.warn('Failed to write _meta.json:', e?.message || e);
+      return res.json({ ok: true, quoteNo: finalQuoteNo, customerName });
+    }
   } catch (err) {
-    // ...existing error handling...
+    console.error('saveMeta error:', err && err.stack ? err.stack : err);
+    res.status(500).json({ ok: false, error: 'Failed to save meta', detail: String(err?.message || err) });
   }
 }
 

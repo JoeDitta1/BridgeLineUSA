@@ -41,76 +41,139 @@ BridgeLineUSA will grow into a **multi-company network platform** supporting **h
 - **Future Scope**:  
   - Marketplace layer for OEM ↔ Manufacturer matching.  
   - Subscription billing + revenue engine.  
-  - Vendor/Supplier portal.  
-  - Advanced analytics dashboards.  
+  # BridgeLineUSA Project Requirements Document (PRD)
 
----
+  > Source of truth for features & acceptance criteria.
+  > This markdown mirrors PRD.docx and adds explicit AI sections and API contracts.
+  > Status tags: [Working], [Needs Fix], [Not Started]
 
-## 3. Stakeholders & Users
-- **OEMs (Customers)**: View quotes, submit POs, track jobs, see QC docs.  
-- **Manufacturers (SCM + network shops)**: Run Production Module, manage jobs.  
-- **SCM Internal Users**: Estimators, Admins, Production operators, QC inspectors.  
-- **Supervisors/PMs**: Manage efficiency, schedule jobs, approve POs.  
-- **BridgeLineUSA Admin**: Platform owner, manages billing, onboarding, global settings.  
+  ---
 
----
+  ## 0. Changelog
+  - 2025-08-31: Added explicit AI integration specs for Quotes, Sales Orders, Quality, OEM Portal.
 
-## 4. Modules & Functional Requirements
+  ## 1. Introduction & Purpose
+  BridgeLineUSA is an AI-driven manufacturing operations and collaboration platform that bridges OEMs and Manufacturers. This document is the master PRD and contains feature descriptions, acceptance criteria, and API contracts (including AI endpoints).
 
-### 4.1 Quoting Module
-- **Quote Log [Working/Needs Fix]**  
-  - Auto-generates Quote Numbers (SCM-Q-####).  
-  - Table view of all quotes.  
-  - [Needs Fix] Link quote numbers → customer quote folders.  
-  - [Not Started] Delete feature (with recycle bin for recovery).  
-  - Sales Order # auto-populates if quote becomes job.  
+  ## 2. Scope (summary)
+  - Phase 1: Quotes → Sales Orders → Production Work Orders; System Materials DB; Inventory (separate); Quality Module; Admin; OEM Portals; AI Assistants.
+  - Future: Marketplace, billing, vendor portals, advanced analytics.
 
-- **New Quote Form [In Progress]**  
-  - BOM builder (materials, processes, outsourcing).  
-  - Material dropdown pulls from **System Materials DB**.  
-  - [Not Started] “AI Auto BOM” button → parse uploaded drawings, auto-fill BOM.  
-  - [Needs Fix] Drawing upload → save to `Customer Quotes/<Quote #>/Drawings`.  
-  - Quick Save Draft & Finalize → [Needs Fix] currently failing with “Save failed: Failed to fetch”.  
-  - Quality Preference dropdown:  
-    - If selected, pulls QC items from Quality Module (X-ray, Hydro, Weld Maps, etc.) into pricing table.  
+  ## 3. Stakeholders & Users (summary)
+  - OEMs (customers), Manufacturers (shops), SCM internal users (estimators, ops, QC), Supervisors, Platform Admins.
 
-- **Outputs [Not Started]**  
-  - Quote PDFs (email to customer or download).  
-  - “Create Job” button → convert quote into Sales Order.  
+  ---
 
----
+  ## 4. Modules & Functional Requirements (AI-focused excerpts)
 
-### 4.2 Sales Orders Module
-- **Sales Order Log [Not Started]**  
-  - Auto-generates Sales Order # (SCM-S-####).  
-  - Links to Sales Order folders.  
-  - Shows associated customer PO # (visible wherever SO number is shown).  
-  - Status: Draft / Pending / Accepted / In Progress / Complete.  
+  ### 4.1 Quoting Module [Working/Needs Fix]
+  - Save + attachments: files uploaded to Supabase Storage; attachments metadata stored in `attachments` table. [Working]
+  - **New Quote Form [In Progress]**
+    - BOM builder (materials, processes, outsourcing).
+    - Material dropdown pulls from **System Materials DB**.
+  - **AI Buttons**
+    - **AI (per Material row)** → prompts user to describe non-catalog items (e.g., electrical, mechanical).  
+      → AI suggests candidate material, user accepts, system adds row with fields populated.
+    - **AI BOM from Drawings** → parses attached drawings and auto-creates a full BOM item list.
+  - Drawing upload → save to `Customer Quotes/<Quote #>/Drawings`. [Needs Fix]
+  - Quick Save Draft & Finalize → [Needs Fix] currently fails (“Save failed: Failed to fetch”).
+  - **Length + Unit + Tolerance**
+    - Length field split into: numeric value + unit dropdown (in, mm, ft).
+    - User can set ± tolerance values and tolerance unit per dimension.
+    - System normalizes to feet internally but stores original value + unit for production docs.
+    - Tolerances carried into Production Work Orders.
+  - Quality Preference dropdown:
+    - If selected, pulls QC items from Quality Module (X-ray, Hydro, Weld Maps, etc.) into pricing table.
+  - Navigation buttons: return to Dashboard, return to Quote Log, etc. [Not Started]
 
-- **Sales Order Creation**  
-  - Trigger paths:  
-    1. From a Quote → direct conversion.  
-    2. From Log → “Create Sales Order” manually.  
-    3. From OEM Portal → customer uploads PO, drawings, notes.  
-  - PM review step → accept/revise order.  
-  - Auto-email customer on acceptance.  
+  ### 4.2 Sales Orders
+  - AI Booster: Validate routers & process times, suggest batching. [Not Started]
+    - Endpoint: POST /api/ai/jobs (kick off planner), GET /api/ai/jobs/:jobId (poll status/result).
 
-- **Sales Order Form (Work Order Form)**  
-  - Copy of Quote Form (if quote exists).  
-  - Editable for processes, times, quality requirements.  
-  - AI Booster button: reviews all inputs + files → flags missing processes, QC points, inconsistencies.  
-  - Equipment selection links to Equipment Module.  
-  - “Create Production Routers” button auto-generates routers.  
+  ### 4.4 Quality Module
+  - AI QC Assistant: generate QC checklists and validate uploads (images, weld maps). [Not Started]
 
----
+  ### 4.9 OEM Portal
+  - AI Concierge: natural language Q&A scoped to customer data (quotes, jobs, QC). [Not Started]
 
-### 4.3 Production Module
-- **Work Orders [Not Started]**  
-  - Generated from Sales Orders.  
-  - Splits into **trackable routers** for each unit or batch.  
-    - Example: PO for 10 pcs → system creates 10 routers.  
-    - Each router independently tracked (e.g., 1 in welding, 4 in QC, 5 shipped).  
-  - AI-assisted grouping → combine materials/processes across jobs for efficiency.  
+  ---
+
+  ## 5. Non-Functional & Security
+  - RLS: enforce tenant isolation for attachments, quotes, materials where appropriate.
+  - Service role (server) generates signed URLs for downloads; short TTLs.
+  - Secrets must not be committed; `.env.sample` provides variable names.
+
+  ---
+
+  ## 6. Acceptance Criteria (AI additions)
+  - Quoting: AI-extracted BOM suggestions can be approved and appended to the Quote BOM table; audit records retained.
+  - Materials: AI search returns structured candidates; approved entries insert into Materials DB with stable `value` key.
+  - AI jobs: asynchronous jobs expose status and results via GET /api/ai/jobs/:jobId.
+
+  ---
+
+  ## 7. API Contracts (AI + attachments)
+
+  ### Attachments / Upload
+  - POST /api/quotes/:quoteNo/upload?subdir=drawings
+    - multipart/form-data field `files`
+    - Behavior: store bytes in Supabase Storage under `quotes/{quote_no}/{subdir}/{uuid}.{ext}`, insert row into `attachments` table, return `{ ok:true, quote, attachments:[...] }` where attachments include `id`, `object_key`, `content_type`, `size_bytes`, `url` (signed).
+
+  ### AI endpoints
+  - POST /api/quotes/:id/ai/extract-bom
+    - Request: { } (server uses attachments for that quote)
+    - Response: { suggestions: [{ material, size, qty, notes, confidence, source }] }
+
+  - POST /api/materials/ai/search
+    - Request: { q: string }
+    - Response: { candidates: [{ label, value, unit_type, weight_per_ft, source, confidence }] }
+
+  - POST /api/ai/jobs
+    - Request: { type: string, payload: object }
+    - Response: { jobId }
+
+  - GET /api/ai/jobs/:jobId
+    - Response: { jobId, status: 'pending'|'running'|'failed'|'done', result: object|null, error?:string }
+
+  ---
+
+  ## 8. Attachments Schema (Postgres)
+  Run in Supabase SQL editor or migration runner:
+
+  ```sql
+  create extension if not exists pgcrypto;
+  create table attachments (
+    id uuid primary key default gen_random_uuid(),
+    parent_type text not null check (parent_type in ('quote','sales_order','router','qc_step')),
+    parent_id text not null,
+    label text,
+    object_key text not null,
+    content_type text,
+    size_bytes bigint,
+    sha256 text,
+    uploaded_by uuid,
+    created_at timestamptz default now(),
+    version int default 1
+  );
+  create index on attachments (parent_type, parent_id);
+  create unique index on attachments (object_key);
+  ```
+
+  Notes on RLS and policies:
+  - Add tenant/owner columns (e.g., `company_id`) if you need strict OEM isolation; policies should reference `auth.uid()` and map to `uploaded_by` or `company_id`.
+
+  ---
+
+  ## 9. Tests (minimum)
+  - Unit: fileService.save (local driver) writes object_key and signedUrl returns url.
+  - Integration: upload → attachments row inserted → GET /api/quotes/:quoteNo/files returns attachment with signed URL.
+  - AI: POST /api/quotes/:id/ai/extract-bom returns suggestions schema (mocked/canned) for tests.
+
+  ---
+
+  If you want, I will now:
+  - Implement the AI extraction endpoint scaffold (server-side job + mock extractor) and the `POST /api/materials/ai/search` stub returning candidates from local materials DB.
+  - Add frontend UI bits to show AI suggestions in the Quote form.
 
 - **Operator Experience (Tablet/Phone)**  
   - User clocks in → greeted by name.  

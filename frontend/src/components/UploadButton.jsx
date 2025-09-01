@@ -1,8 +1,9 @@
 // client/src/components/UploadButton.jsx
 import React, { useRef, useState } from "react";
-import { uploadOne } from "../api/upload";
+import { uploadOne, uploadFilesToQuote } from "../api/upload";
 
-export default function UploadButton({ onUploaded }) {
+// props: onUploaded(result), quoteNo (optional), subdir (optional, defaults to 'uploads')
+export default function UploadButton({ onUploaded, quoteNo, subdir = 'uploads' }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState(null);
@@ -12,15 +13,28 @@ export default function UploadButton({ onUploaded }) {
 
   const handle = async (e) => {
     setErr("");
-    const f = e.target.files?.[0];
-    if (!f) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
     setBusy(true);
-    try {
-      const res = await uploadOne(f);
-      setLast(res);
-      onUploaded?.(res); // pass up to parent if provided
-    } catch (e) {
-      setErr(e?.message || "Upload failed");
+      try {
+      // If quoteNo provided, upload to quote-specific endpoint under provided subdir
+      if (quoteNo) {
+        const res = await uploadFilesToQuote(quoteNo, files, subdir);
+        setLast(res);
+          // Normalize callback payload: always call onUploaded with an ARRAY of items
+          const attachments = Array.isArray(res && res.attachments) ? res.attachments
+            : Array.isArray(res) ? res
+            : (res && res.attachments ? [res.attachments] : (res ? [res] : []));
+          onUploaded?.(attachments);
+      } else {
+        // fallback: upload first file to generic /api/upload (legacy)
+        const res = await uploadOne(files[0]);
+        setLast(res);
+        // legacy single-file response — wrap into an array for consistency
+        onUploaded?.(res ? [res] : []);
+      }
+    } catch (errRes) {
+      setErr(errRes?.message || "Upload failed");
     } finally {
       setBusy(false);
       e.target.value = ""; // reset file input

@@ -44,6 +44,8 @@ export default function App() {
       <Route path="/quotes" element={<QuotesLanding />} />
       <Route path="/quotes/log" element={<QuoteLog />} />
       <Route path="/quote/new" element={<QuoteForm />} />
+      {/* Edit an existing quote */}
+      <Route path="/quote/:quoteNo" element={<QuoteForm />} />
       <Route path="/quotes/new" element={<Navigate to="/quote/new" replace />} />
       <Route path="/quotes/:quoteNo/files" element={<QuoteFiles />} />
 

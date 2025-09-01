@@ -84,4 +84,29 @@ router.get('/equipment', (req, res) => {
   }
 });
 
+// List quote sync queue
+router.get('/quote-sync-queue', (req, res) => {
+  try {
+    const rows = db.prepare("SELECT * FROM quote_sync_queue ORDER BY created_at DESC LIMIT 200").all();
+    res.json({ ok: true, items: rows });
+  } catch (e) {
+    console.error('[admin:queue] error:', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Retry a failed queue item by id
+router.post('/quote-sync-queue/:id/retry', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const row = db.prepare('SELECT * FROM quote_sync_queue WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ ok: false, error: 'Not found' });
+    db.prepare("UPDATE quote_sync_queue SET status = 'pending', last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[admin:queue:retry] error:', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 export default router;

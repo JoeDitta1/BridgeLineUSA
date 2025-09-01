@@ -30,6 +30,8 @@ class LocalFsDriver {
     const size = buffer.length;
     const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
     const object_key = path.relative(this.base, fullPath).replaceAll('\\', '/');
+    const relUrl = `/files/${encodeURIComponent(sanitize(customer_name))}/${encodeURIComponent(sanitize(parent_id))}/${encodeURIComponent(sanitize(subdir))}/${encodeURIComponent(filename)}`;
+    const base = process.env.EXTERNAL_API_BASE || null;
     return {
       object_key,
       content_type: content_type || 'application/octet-stream',
@@ -37,13 +39,15 @@ class LocalFsDriver {
       sha256,
       storage: 'local',
       filename,
-      url: `/files/${encodeURIComponent(sanitize(customer_name))}/${encodeURIComponent(sanitize(parent_id))}/${encodeURIComponent(sanitize(subdir))}/${encodeURIComponent(filename)}`
+      url: base ? new URL(relUrl, base).href : relUrl
     };
   }
 
   // generate a download URL (local: direct file path served by express static)
   async signedUrl(object_key, ttl = 60) {
-    return { url: `/files/${object_key}` };
+  const rel = `/files/${object_key}`;
+  const base = process.env.EXTERNAL_API_BASE || null;
+  return { url: base ? new URL(rel, base).href : rel };
   }
 }
 

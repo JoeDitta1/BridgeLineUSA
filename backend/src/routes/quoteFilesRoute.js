@@ -73,19 +73,26 @@ router.get('/:quoteNo/files', async (req, res) => {
       const { data, error } = await supabase.from('attachments').select('*').eq('parent_type', 'quote').eq('parent_id', quoteNo).order('created_at', { ascending: false });
       if (error) throw error;
       const out = [];
+  // If EXTERNAL_API_BASE is explicitly set, use its absolute base for URLs.
+  // Otherwise return relative paths (so the frontend dev proxy or host can
+  // resolve them correctly). This avoids mixed-host/mixed-protocol issues.
+  const baseForUrls = process.env.EXTERNAL_API_BASE || null;
       for (const r of (data || [])) {
         let signed = { url: null };
         try {
           // use fileService to create signed url
           signed = await fileService.signedUrl(r.object_key, 60);
         } catch (e) {}
+        const filename = r.object_key.split('/').slice(-1)[0];
+  const rel = `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(r.label || '')}/${encodeURIComponent(filename)}`;
+  const finalUrl = (signed && typeof signed.url === 'string' && signed.url.startsWith('http')) ? signed.url : (baseForUrls ? new URL(rel, baseForUrls).href : rel);
         out.push({
-          name: r.object_key.split('/').slice(-1)[0],
+          name: filename,
           subdir: r.label || '',
           size: r.size_bytes || null,
           modifiedAt: r.created_at || null,
           mime: r.content_type || 'application/octet-stream',
-          url: signed.url || `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(r.label || '')}/${encodeURIComponent(r.object_key.split('/').slice(-1)[0])}`
+          url: finalUrl
         });
       }
       return res.json(out);
@@ -98,13 +105,17 @@ router.get('/:quoteNo/files', async (req, res) => {
         const out = [];
         for (const r of rows) {
           const signed = await fileService.signedUrl(r.object_key, 60).catch(() => ({ url: null }));
+          const filename = (r.object_key || '').split('/').slice(-1)[0];
+          const rel = `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(r.label || '')}/${encodeURIComponent(filename)}`;
+          const baseForUrls2 = process.env.EXTERNAL_API_BASE || null;
+          const finalUrl2 = (signed && typeof signed.url === 'string' && signed.url.startsWith('http')) ? signed.url : (baseForUrls2 ? new URL(rel, baseForUrls2).href : rel);
           out.push({
-            name: (r.object_key || '').split('/').slice(-1)[0],
+            name: filename,
             subdir: r.label || '',
             size: r.size_bytes || null,
             modifiedAt: r.created_at || null,
             mime: r.content_type || 'application/octet-stream',
-            url: signed.url || `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(r.label || '')}/${encodeURIComponent((r.object_key || '').split('/').slice(-1)[0])}`
+            url: finalUrl2
           });
         }
         return res.json(out);
@@ -116,6 +127,7 @@ router.get('/:quoteNo/files', async (req, res) => {
     // Filesystem fallback (legacy)
     const { dir, subdirs } = await ensureQuoteTree(customerName, quoteNo);
     const files = [];
+  const baseForFiles = process.env.EXTERNAL_API_BASE || null;
     for (const s of subdirs) {
       const p = path.join(dir, s);
       if (!fs.existsSync(p)) continue;
@@ -124,13 +136,15 @@ router.get('/:quoteNo/files', async (req, res) => {
         const full = path.join(p, name);
         const st = await fsp.stat(full);
         if (!st.isFile()) continue;
+        const rel = `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(s)}/${encodeURIComponent(name)}`;
         files.push({
           name,
           subdir: s,
           size: st.size,
           modifiedAt: st.mtime,
           mime: mime.lookup(name) || 'application/octet-stream',
-          url: `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(s)}/${encodeURIComponent(name)}`
+          // Return relative path unless EXTERNAL_API_BASE is configured.
+          url: baseForFiles ? new URL(rel, baseForFiles).href : rel
         });
       }
     }
@@ -176,9 +190,23 @@ router.post('/:quoteNo/upload', upload.array('files'), async (req, res) => {
       }
     }
 
-    // Return updated quote + attachments list for client to re-render folder tree
-    const quote = db.prepare('SELECT * FROM quotes WHERE quote_no = ?').get(quoteNo);
-    res.json({ ok: true, quote, attachments });
+  // Return updated quote + attachments list for client to re-render folder tree
+  const quote = db.prepare('SELECT * FROM quotes WHERE quote_no = ?').get(quoteNo);
+  // expose unique labels for folder dropdowns
+  const labels = [...new Set((attachments || []).map(a => a.label).filter(Boolean))];
+  // ensure each attachment includes a usable absolute url (if not present)
+  const baseForAttachments = process.env.EXTERNAL_API_BASE || `${req.protocol}://${req.get('host')}`;
+  const attachmentsWithUrls = (attachments || []).map(a => {
+    const filename = (a.object_key || a.filename || '').split('/').slice(-1)[0] || a.filename || a.name || '';
+    const rel = `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(a.label || '')}/${encodeURIComponent(filename)}`;
+    const finalUrl = (a && typeof a.url === 'string' && a.url.startsWith('http')) ? a.url : new URL(rel, baseForAttachments).href;
+    return {
+      ...a,
+      name: filename,
+      url: finalUrl
+    };
+  });
+  return res.json({ ok: true, quote, attachments: attachmentsWithUrls, labels });
   } catch (e) {
     console.error('[upload] failed:', e && e.message ? e.message : e);
     res.status(500).json({ ok: false, error: String(e?.message || e) });
@@ -197,13 +225,17 @@ router.post('/:quoteNo/files', (req, res, next) => {
     const customerName = getCustomerByQuoteNo(quoteNo);
     if (!customerName) return res.status(404).json({ uploaded: [] });
 
+    const baseForLegacy = process.env.EXTERNAL_API_BASE || `${req.protocol}://${req.get('host')}`;
     res.json({
-      uploaded: (req.files || []).map(f => ({
-        name: f.originalname,
-        size: f.size,
-        storedAs: f.filename,
-        url: `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/uploads/${encodeURIComponent(f.filename)}`
-      }))
+      uploaded: (req.files || []).map(f => {
+        const rel = `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/uploads/${encodeURIComponent(f.filename)}`;
+        return {
+          name: f.originalname,
+          size: f.size,
+          storedAs: f.filename,
+          url: new URL(rel, baseForLegacy).href
+        };
+      })
     });
   } catch {
     res.json({ uploaded: [] });

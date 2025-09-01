@@ -3,11 +3,19 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { filePathToUrl } from "../lib/fileUrls";
 
-const API_BASE = (process.env.REACT_APP_API_BASE || "http://localhost:4000").replace(/\/+$/, "");
+// Prefer a blank REACT_APP_API_BASE so CRA dev-server proxy (or Codespaces host) is used.
+const API_BASE = (process.env.REACT_APP_API_BASE || '').replace(/\/+$/, '');
 
 export default function QuoteFolderView() {
   const { customerName, quoteNo, section } = useParams();
   const navigate = useNavigate();
+  // If the user selected the 'Quote Form' folder, redirect to the canonical
+  // quote editor route so the QuoteForm component handles hydration from _meta.json.
+  React.useEffect(() => {
+    if (section === 'quote-form') {
+      navigate(`/quote/${encodeURIComponent(quoteNo)}`);
+    }
+  }, [section, quoteNo, navigate]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [files, setFiles] = useState([]);

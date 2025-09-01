@@ -2,7 +2,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 
-const API_BASE = (process.env.REACT_APP_API_BASE || 'http://localhost:4000').replace(/\/+$/, '');
+// Prefer a blank REACT_APP_API_BASE so CRA dev-server proxy (or Codespaces host) is used.
+const API_BASE = (process.env.REACT_APP_API_BASE || '').replace(/\/+$/, '');
 
 export default function CustomerQuoteDetail() {
   // Route param is :customerName (keep a fallback if router supplied :slug previously)

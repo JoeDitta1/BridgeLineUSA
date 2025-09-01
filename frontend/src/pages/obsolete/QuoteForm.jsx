@@ -810,8 +810,8 @@ export default function QuoteForm() {
                 quoteNo={meta.quoteNo || routeQuoteNo || ''}
                 subdir="uploads"
                 onUploaded={(items) => {
-                  // items: [{ originalname, size, subdir, path, url }]
-                  setUploads(prev => [...items, ...prev]);
+                  const list = Array.isArray(items) ? items : (items ? [items] : []);
+                  setUploads(prev => [...list, ...prev]);
                 }}
               />
             </div>
