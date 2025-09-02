@@ -194,6 +194,79 @@ export function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_attachments_parent ON attachments(parent_type, parent_id);
   `);
+
+  // Files, versions, previews and join table for quotes
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS files (
+      id TEXT PRIMARY KEY,
+      customer_id INTEGER,
+      quote_id INTEGER,
+      kind TEXT,
+      title TEXT,
+      created_by TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      deleted_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS file_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_id TEXT NOT NULL,
+      object_key TEXT NOT NULL,
+      mime_type TEXT,
+      ext TEXT,
+      size_bytes INTEGER,
+      sha256 TEXT,
+      width_px INTEGER,
+      height_px INTEGER,
+      page_count INTEGER,
+      source_tool TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(file_id) REFERENCES files(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS file_previews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_version_id INTEGER NOT NULL,
+      size_key TEXT,
+      object_key TEXT NOT NULL,
+      mime_type TEXT,
+      width_px INTEGER,
+      height_px INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(file_version_id) REFERENCES file_versions(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS quote_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      quote_id INTEGER NOT NULL,
+      file_id TEXT NOT NULL,
+      role TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(file_id) REFERENCES files(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_files_quote ON files(quote_id);
+    CREATE INDEX IF NOT EXISTS idx_file_versions_file ON file_versions(file_id);
+    CREATE INDEX IF NOT EXISTS idx_file_previews_version ON file_previews(file_version_id);
+    CREATE INDEX IF NOT EXISTS idx_quote_files_quote ON quote_files(quote_id);
+  `);
+
+  // Ensure older installations with a legacy quote_files table are updated
+  try {
+    const qCols = db.prepare("PRAGMA table_info('quote_files')").all() || [];
+    const colNames = qCols.map(c => c.name);
+    if (!colNames.includes('file_id')) {
+      db.exec("ALTER TABLE quote_files ADD COLUMN file_id TEXT");
+    }
+    if (!colNames.includes('role')) {
+      db.exec("ALTER TABLE quote_files ADD COLUMN role TEXT");
+    }
+    if (!colNames.includes('created_at')) {
+      db.exec("ALTER TABLE quote_files ADD COLUMN created_at TEXT DEFAULT (datetime('now'))");
+    }
+  } catch (e) {
+    console.warn('[DB] quote_files migration check failed:', e && e.message ? e.message : e);
+  }
 }
 
 // For Postgres/Supabase migrations: helper SQL to create desired schema with UUIDs

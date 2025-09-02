@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 
 import quoteFilesRoute from './routes/quoteFilesRoute.js';
 import uploadRoute from './uploadRoute.js';
+import filesRoute from './routes/files.js';
 import materialsRoute from './materialsRoute.js';
 import quotesRoute from './routes/quotesRoute.js';
 import settingsRoute from './routes/settingsRoute.js';
@@ -225,6 +226,9 @@ app.use('/api', quotesBomRoutes);
 app.use('/api/quotes', quoteFilesRoute);
 // Optional legacy mount
 app.use('/api/quote-files', quoteFilesRoute);
+
+// New generic files route (quote-level listing and signed URLs)
+app.use('/api/files', filesRoute);
 
 /* --------------------------------- Health -------------------------------- */
 app.get('/api/health', (req, res) => {

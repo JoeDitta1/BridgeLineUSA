@@ -1,0 +1,14 @@
+{
+  "name": "BridgeLineUSA Dev Container",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "forwardPorts": [4000],
+  "postCreateCommand": "echo 'Devcontainer ready'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-node-azure-pack",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}

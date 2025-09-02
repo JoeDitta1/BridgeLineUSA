@@ -3,8 +3,8 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { filePathToUrl } from "../lib/fileUrls";
 
-// Prefer a blank REACT_APP_API_BASE so CRA dev-server proxy (or Codespaces host) is used.
-const API_BASE = (process.env.REACT_APP_API_BASE || '').replace(/\/+$/, '');
+// Prefer Vite env when available, fall back to CRA REACT_APP_API_BASE. Keep empty string to use dev-server proxy.
+const API_BASE = ((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) || process.env.REACT_APP_API_BASE || '').replace(/\/+$/, '');
 
 export default function QuoteFolderView() {
   const { customerName, quoteNo, section } = useParams();

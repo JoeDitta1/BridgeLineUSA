@@ -67,14 +67,17 @@ export default function UploadButton({ onUploaded, quoteNo, subdir = 'uploads' }
       </button>
 
       {last && (
-        <a
-          href={`${process.env.REACT_APP_API_BASE || ''}/uploads/${last.fileName}`}
-          target="_blank"
-          rel="noreferrer"
-          style={{ fontSize: 12 }}
-        >
-          Open: {last.originalName}
-        </a>
+        (() => {
+          // Prefer VITE env (import.meta.env) when available, fall back to CRA REACT_APP_API_BASE
+          const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) || (process.env.REACT_APP_API_BASE || '');
+          const base = API_BASE.replace ? API_BASE.replace(/\/+$|^\s+|\s+$/g, '') : API_BASE;
+          const href = `${base}/uploads/${last.fileName}`;
+          return (
+            <a href={href} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
+              Open: {last.originalName}
+            </a>
+          );
+        })()
       )}
       {err && <div style={{ color: "#b00020", fontSize: 12 }}>{err}</div>}
     </div>

@@ -5,9 +5,12 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import mime from 'mime-types';
+import crypto from 'crypto';
 import * as dbModule from '../db.js';
 import { v4 as uuidv4 } from 'uuid';
 import fileServiceFactory from '../../src/fileService.js';
+import { LocalFsDriver, SupabaseStorageDriver } from '../../src/fileService.js';
+import * as filesModel from '../models/files.js';
 
 const db = dbModule.default ?? dbModule.db ?? dbModule;
 const router = express.Router();
@@ -25,6 +28,18 @@ function getCustomerByQuoteNo(quoteNo) {
 /** data/quotes/<CustomerName>/<QuoteNo> */
 const getQuoteDir = (customerName, quoteNo) =>
   path.join(getQuotesBaseDir(), safeFolderName(customerName), safeFolderName(quoteNo));
+
+// helper: sha256 of a Buffer
+function sha256Buf(buf) {
+  return crypto.createHash('sha256').update(buf).digest('hex');
+}
+
+// returns existing {file_uuid, object_key} for given sha under a quote, or null
+function findExistingBySha(quoteId, sha) {
+  // Search canonical attachments first (attachments.parent_id stores the quote_no string)
+  const row = db.prepare(`SELECT * FROM attachments WHERE parent_type = ? AND parent_id = ? AND sha256 = ? AND object_key LIKE ? ORDER BY created_at DESC LIMIT 1`).get('quote', quoteId, sha, 'customers/%');
+  return row || null;
+}
 
 /** Ensure standard subfolders & return { dir, subdirs } */
 async function ensureQuoteTree(customerName, quoteNo) {
@@ -166,47 +181,142 @@ router.post('/:quoteNo/upload', upload.array('files'), async (req, res) => {
     const customerName = getCustomerByQuoteNo(quoteNo);
     if (!customerName) return res.status(404).json({ ok: false, error: `Quote ${quoteNo} not found` });
 
-    const attachments = [];
-    for (const f of (req.files || [])) {
-      const meta = await fileService.save({
-        parent_type: 'quote',
-        parent_id: quoteNo,
-        customer_name: customerName,
-        subdir,
-        originalname: f.originalname,
-        buffer: f.buffer,
-        content_type: f.mimetype,
-        uploaded_by: req.user?.id || null
-      });
+    const USE_SUPABASE = String(process.env.USE_SUPABASE || '').toLowerCase() === '1' || String(process.env.USE_SUPABASE || '').toLowerCase() === 'true';
 
-      // if local driver, insert a row in sqlite attachments table; supabase driver already inserted
-      if (meta.storage === 'local') {
-        const stmt = db.prepare(`INSERT INTO attachments (id, parent_type, parent_id, label, object_key, content_type, size_bytes, sha256, uploaded_by, created_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1)`);
-        const id = uuidv4();
-        stmt.run(id, 'quote', quoteNo, subdir, meta.object_key, meta.content_type, meta.size_bytes, meta.sha256, req.user?.id || null);
-        attachments.push({ id, ...meta });
-      } else {
-        attachments.push(meta);
+    const localDriver = new LocalFsDriver({});
+    let supaDriver = null;
+    if (USE_SUPABASE) {
+      try {
+        supaDriver = new SupabaseStorageDriver({ bucket: process.env.SUPABASE_BUCKET_UPLOADS || 'blusa-uploads-prod' });
+      } catch (e) {
+        console.warn('[upload] supabase driver init failed:', e && e.message ? e.message : e);
+        supaDriver = null;
       }
     }
 
-  // Return updated quote + attachments list for client to re-render folder tree
-  const quote = db.prepare('SELECT * FROM quotes WHERE quote_no = ?').get(quoteNo);
-  // expose unique labels for folder dropdowns
-  const labels = [...new Set((attachments || []).map(a => a.label).filter(Boolean))];
-  // ensure each attachment includes a usable absolute url (if not present)
-  const baseForAttachments = process.env.EXTERNAL_API_BASE || `${req.protocol}://${req.get('host')}`;
-  const attachmentsWithUrls = (attachments || []).map(a => {
-    const filename = (a.object_key || a.filename || '').split('/').slice(-1)[0] || a.filename || a.name || '';
-    const rel = `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(a.label || '')}/${encodeURIComponent(filename)}`;
-    const finalUrl = (a && typeof a.url === 'string' && a.url.startsWith('http')) ? a.url : new URL(rel, baseForAttachments).href;
-    return {
-      ...a,
-      name: filename,
-      url: finalUrl
-    };
-  });
-  return res.json({ ok: true, quote, attachments: attachmentsWithUrls, labels });
+    const attachments = [];
+    const warnings = [];
+
+
+    for (const f of (req.files || [])) {
+      const buf = f.buffer || f.file?.buffer || f.data;
+      if (!buf) {
+        warnings.push(`missing buffer for ${f.originalname || f.filename}`);
+        continue;
+      }
+
+      const sha = sha256Buf(buf);
+
+      // fast path: if a file_version with this sha already exists for this quote, reuse its file_uuid/object_key
+  const existing = findExistingBySha(quoteNo, sha);
+      let fileUuid = null;
+      if (existing && existing.object_key) {
+        // object_key: customers/<customer>/quotes/<quoteNo>/<subdir>/<file_uuid>/original/<filename>
+        const parts = existing.object_key.split('/');
+        // expect parts[5] to be file_uuid when canonical
+        fileUuid = parts[5] || null;
+      }
+
+      // build canonical keys (reuse fileUuid if found; else create new UUID)
+      if (!fileUuid) fileUuid = uuidv4();
+      const canonicalBase = `customers/${customerName}/quotes/${quoteNo}/${subdir}/${fileUuid}`;
+      const canonicalOriginalKey = `${canonicalBase}/original/${f.originalname}`;
+
+      // If an existing canonical object (for this quote + sha) exists, reuse it and skip driver saves
+      let skipDriverSave = false;
+      let chosenObjectKey = null;
+      let supaMeta = null;
+      let localMeta = null;
+      if (existing && existing.object_key) {
+        chosenObjectKey = existing.object_key;
+        skipDriverSave = true;
+      } else {
+        // Save local copy (always) and await result
+        localMeta = await localDriver.save({ parent_type: 'quote', parent_id: quoteNo, customer_name: customerName, subdir, originalname: f.originalname, buffer: buf, content_type: f.mimetype, uploaded_by: req.user?.id || null });
+
+        // Attempt supabase save if enabled
+        if (USE_SUPABASE && supaDriver) {
+          try {
+            supaMeta = await supaDriver.save({ parent_type: 'quote', parent_id: quoteNo, customer_name: customerName, subdir, originalname: f.originalname, buffer: buf, content_type: f.mimetype, uploaded_by: req.user?.id || null });
+          } catch (e) {
+            console.warn('[upload] supaDriver.save failed:', e && e.message ? e.message : e);
+            supaMeta = null;
+          }
+        }
+
+        chosenObjectKey = supaMeta?.object_key || localMeta?.object_key;
+      }
+      if (!chosenObjectKey) {
+        console.error('[upload] no object_key returned by drivers', { localMeta, supaMeta });
+        throw new Error('No object_key available after driver saves');
+      }
+
+      // DB transaction to ensure atomicity
+      db.exec('BEGIN');
+      try {
+        // upsert files row by (quote_id, file_uuid) — we store file_uuid in the files.id field for simplicity
+        // Ensure files.id is deterministic per fileUuid so we can reuse across versions
+        const fileId = fileUuid; // reuse the uuid as the files.id
+        let fileRow = db.prepare('SELECT id FROM files WHERE id = ?').get(fileId);
+        if (!fileRow) {
+          db.prepare('INSERT INTO files (id, customer_id, quote_id, kind, title, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(fileId, null, quoteNo, 'drawing', f.originalname, req.user?.id || null);
+          fileRow = db.prepare('SELECT id FROM files WHERE id = ?').get(fileId);
+        }
+
+        // insert a new version only if this sha not already present for that file
+        const vExists = db.prepare('SELECT id FROM file_versions WHERE file_id = ? AND sha256 = ?').get(fileRow.id, sha);
+        if (!vExists) {
+          db.prepare(`INSERT INTO file_versions (file_id, object_key, mime_type, ext, size_bytes, sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`)
+            .run(fileRow.id, chosenObjectKey, f.mimetype, path.extname(f.originalname || ''), Buffer.byteLength(buf), sha);
+        }
+
+        // ensure attachments row exists for canonical object (insert if missing)
+        const attExists = db.prepare('SELECT id FROM attachments WHERE parent_type = ? AND parent_id = ? AND object_key = ? LIMIT 1').get('quote', quoteNo, chosenObjectKey);
+        if (!attExists) {
+          db.prepare('INSERT INTO attachments (id, parent_type, parent_id, label, object_key, content_type, size_bytes, sha256, uploaded_by, created_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(\'now\'), 1)')
+            .run(uuidv4(), 'quote', quoteNo, subdir, chosenObjectKey, supaMeta?.content_type || localMeta?.content_type || f.mimetype, supaMeta?.size_bytes || localMeta?.size_bytes || Buffer.byteLength(buf), sha, req.user?.id || null);
+        }
+
+        db.exec('COMMIT');
+      } catch (e) {
+        db.exec('ROLLBACK');
+        // cleanup supabase orphan if we wrote it and DB failed
+        if (supaMeta?.object_key) {
+          try { await supaDriver.remove?.(supaMeta.object_key); } catch (_) {}
+        }
+        throw e;
+      }
+
+      // push result for response
+      attachments.push({ filename: f.originalname, sha256: sha, object_key: chosenObjectKey, local_only: !supaMeta, label: subdir });
+      if (!supaMeta) warnings.push('Supabase upload unavailable or disabled for some files');
+    }
+
+    // Return updated quote + attachments list for client to re-render folder tree
+    const quote = db.prepare('SELECT * FROM quotes WHERE quote_no = ?').get(quoteNo);
+    // expose unique labels for folder dropdowns
+    const labels = [...new Set((attachments || []).map(a => a.label).filter(Boolean))];
+
+    // Build attachmentsWithUrls by querying sqlite attachments and creating signed urls where possible
+    const baseForAttachments = process.env.EXTERNAL_API_BASE || `${req.protocol}://${req.get('host')}`;
+    const sqliteRows = db.prepare('SELECT * FROM attachments WHERE parent_type = ? AND parent_id = ? ORDER BY created_at DESC').all('quote', quoteNo) || [];
+    const attachmentsWithUrls = [];
+    for (const r of sqliteRows) {
+      const filename = (r.object_key || '').split('/').slice(-1)[0] || '';
+      // try signed url via supabase if configured
+      let signed = null;
+      try { signed = await (supaDriver ? supaDriver.signedUrl(r.object_key, 60) : fileService.signedUrl(r.object_key, 60)); } catch (e) { signed = null; }
+      const rel = `/files/${encodeURIComponent(safeFolderName(customerName))}/${encodeURIComponent(safeFolderName(quoteNo))}/${encodeURIComponent(r.label || '')}/${encodeURIComponent(filename)}`;
+      const finalUrl = (signed && signed.url && signed.url.startsWith('http')) ? signed.url : new URL(rel, baseForAttachments).href;
+      attachmentsWithUrls.push({ ...r, name: filename, url: finalUrl });
+    }
+
+    // Also include any supabase-only attachments we created but may not be in sqliteRows
+    // (the supaDriver.save inserts into supabase attachments table, but our sqlite may not have row)
+    // For simplicity, attachmentsWithUrls is primarily driven by sqliteRows; add warnings if present
+    const result = { ok: true, quote, attachments: attachmentsWithUrls, labels, warnings };
+    return res.json(result);
   } catch (e) {
     console.error('[upload] failed:', e && e.message ? e.message : e);
     res.status(500).json({ ok: false, error: String(e?.message || e) });

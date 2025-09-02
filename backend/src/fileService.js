@@ -22,15 +22,15 @@ class LocalFsDriver {
 
   async save({ parent_type, parent_id, customer_name, subdir = 'uploads', originalname, buffer, content_type, uploaded_by }) {
     const ext = path.extname(originalname || '') || '';
-    const filename = `${uuidv4()}${ext}`;
-    const destDir = path.join(this.base, sanitize(customer_name || 'unknown'), sanitize(parent_id), sanitize(subdir));
-    await fs.mkdir(destDir, { recursive: true });
-    const fullPath = path.join(destDir, filename);
+    const file_uuid = uuidv4();
+    const canonical_dir = path.join(this.base, 'customers', sanitize(customer_name), 'quotes', sanitize(parent_id), sanitize(subdir), file_uuid, 'original');
+    await fs.mkdir(canonical_dir, { recursive: true });
+    const fullPath = path.join(canonical_dir, originalname);
     await fs.writeFile(fullPath, buffer);
     const size = buffer.length;
     const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-    const object_key = path.relative(this.base, fullPath).replaceAll('\\', '/');
-    const relUrl = `/files/${encodeURIComponent(sanitize(customer_name))}/${encodeURIComponent(sanitize(parent_id))}/${encodeURIComponent(sanitize(subdir))}/${encodeURIComponent(filename)}`;
+    const object_key = `customers/${sanitize(customer_name)}/quotes/${sanitize(parent_id)}/${sanitize(subdir)}/${file_uuid}/original/${originalname}`;
+    const relUrl = `/files/${object_key}`;
     const base = process.env.EXTERNAL_API_BASE || null;
     return {
       object_key,
@@ -38,7 +38,7 @@ class LocalFsDriver {
       size_bytes: size,
       sha256,
       storage: 'local',
-      filename,
+      filename: originalname,
       url: base ? new URL(relUrl, base).href : relUrl
     };
   }
@@ -53,15 +53,15 @@ class LocalFsDriver {
 
 class SupabaseStorageDriver {
   constructor(opts = {}) {
-    if (!supabase) throw new Error('Supabase not configured');
-    this.bucket = opts.bucket || 'attachments';
+  if (!supabase) throw new Error('Supabase not configured');
+  this.bucket = opts.bucket || process.env.SUPABASE_BUCKET_UPLOADS || 'blusa-uploads-prod';
     this.supabase = supabase;
   }
 
   async save({ parent_type, parent_id, customer_name, subdir = 'uploads', originalname, buffer, content_type, uploaded_by }) {
     const ext = path.extname(originalname || '') || '';
-    const filename = `${uuidv4()}${ext}`;
-    const object_key = `quotes/${parent_id}/${subdir}/${filename}`;
+    const file_uuid = uuidv4();
+    const object_key = `customers/${sanitize(customer_name)}/quotes/${sanitize(parent_id)}/${sanitize(subdir)}/${file_uuid}/original/${originalname}`;
     // upload
     const res = await this.supabase.storage.from(this.bucket).upload(object_key, buffer, {
       upsert: false,
@@ -71,21 +71,25 @@ class SupabaseStorageDriver {
     const size = buffer.length;
     const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
 
-    // insert metadata row into Postgres via Supabase client
-    const insert = await this.supabase.from('attachments').insert([{
-      parent_type,
-      parent_id,
-      label: subdir,
-      object_key,
-      content_type: content_type || null,
-      size_bytes: size,
-      sha256,
-      uploaded_by: uploaded_by || null
-    }]);
-    if (insert.error) {
-      // attempt to clean up uploaded object
-      await this.supabase.storage.from(this.bucket).remove([object_key]).catch(()=>{});
-      throw insert.error;
+    // Optionally insert metadata row into Supabase Postgres attachments table.
+    if (String(process.env.SUPABASE_INSERT_ATTACHMENTS || '').toLowerCase() === '1' ||
+        String(process.env.SUPABASE_INSERT_ATTACHMENTS || '').toLowerCase() === 'true') {
+      const insert = await this.supabase.from('attachments').insert([{
+        parent_type,
+        parent_id,
+        label: subdir,
+        object_key,
+        content_type: content_type || null,
+        size_bytes: size,
+        sha256,
+        uploaded_by: uploaded_by || null
+      }]);
+      if (insert.error) {
+        await this.supabase.storage.from(this.bucket).remove([object_key]).catch(()=>{});
+        throw insert.error;
+      }
+    } else {
+      console.warn('[supabase] skipping Postgres attachments insert (SUPABASE_INSERT_ATTACHMENTS not set)');
     }
 
     return {
@@ -94,7 +98,7 @@ class SupabaseStorageDriver {
       size_bytes: size,
       sha256,
       storage: 'supabase',
-      filename
+      filename: originalname
     };
   }
 
@@ -114,4 +118,7 @@ export function createFileService() {
   return new LocalFsDriver({});
 }
 
-export default { createFileService };
+// Named exports for direct driver usage (dual-write scenarios)
+export { LocalFsDriver, SupabaseStorageDriver };
+
+export default { createFileService, LocalFsDriver, SupabaseStorageDriver };

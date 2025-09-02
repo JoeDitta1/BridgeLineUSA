@@ -2,6 +2,7 @@
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import Select from 'react-select';
 import UploadButton from '../components/UploadButton';
+import FileViewerModal from '../components/FileViewerModal';
 import * as priceHistory from '../utils/priceHistory';
 import jfetch from '../lib/jfetch';
 
@@ -10,10 +11,9 @@ const getLastPrice = (args) => (priceHistory.getLastPrice ? priceHistory.getLast
 const setLastPrice = (args, payload) => (priceHistory.setLastPrice ? priceHistory.setLastPrice(args, payload) : savePriceMap({ ...(loadPriceMap()), [priceKey({ family: args.category, description: args.description, unit: args.unit, grade: args.grade, domestic: args.domesticOnly })]: payload }));
 
 // IMPORTANT: point this at your backend (Node/Express) which will talk to Supabase server-side.
-// In development we prefer relative paths so CRA dev-server proxy ("proxy" in package.json)
-// forwards `/api` requests to the backend running in the container. Set
-// `REACT_APP_API_BASE` in env to override (for production or remote hosts).
-const API_BASE = process.env.REACT_APP_API_BASE || '';
+// Prefer Vite-style env (import.meta.env.VITE_API_BASE) when available; fall back to CRA REACT_APP_API_BASE.
+// Leave blank in development to use the CRA dev-server proxy.
+const API_BASE = ((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) || process.env.REACT_APP_API_BASE || '');
 
 /* ------------------------------- Local memory ------------------------------- */
 
@@ -474,6 +474,12 @@ export default function QuoteForm() {
 
   const [step, setStep] = useState(1);
   const [uploads, setUploads] = useState([]); // [{name,url,subdir,size,mtime}]
+  // Files persisted on the server for this quote (read-only listing)
+  const [serverFiles, setServerFiles] = useState([]);
+  // Hover preview URL (small thumbnail, 256px) to show when user hovers a file
+  const [hoverPreviewUrl, setHoverPreviewUrl] = useState(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerFile, setViewerFile] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const today = new Date().toISOString().slice(0,10);
@@ -625,6 +631,23 @@ export default function QuoteForm() {
       }
     })();
   }, []);
+
+  // Load persisted files for this quote (server-side listing)
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const q = (meta.quoteNo || routeQuoteNo || '').trim();
+      if (!q) return;
+      try {
+        const list = await jfetch(`${API_BASE}/api/quotes/${encodeURIComponent(q)}/files`);
+        if (!active) return;
+        if (Array.isArray(list)) setServerFiles(list);
+      } catch (e) {
+        console.warn('Failed to load server files:', e?.message || e);
+      }
+    })();
+    return () => { active = false; };
+  }, [routeQuoteNo, meta.quoteNo]);
   /* --------------------------------- ROWS (BOM) --------------------------------- */
   const emptyRow = {
     itemNo: '',
@@ -1000,64 +1023,88 @@ export default function QuoteForm() {
           </div>
 
           {/* Uploaded files list */}
-          {uploads.length > 0 && (
+          {(serverFiles.length > 0 || uploads.length > 0) && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Uploaded:</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {uploads.map((u, idx) => (
-                  <div
-                    key={`${u.url}-${idx}`}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 8,
-                      padding: '6px 10px'
-                    }}
-                  >
-                    {(() => {
-                      const pageOrigin = window.location.origin;
-                      let href = '';
-                      if (u?.url && String(u.url).startsWith('http')) {
-                        try {
-                          const parsed = new URL(u.url);
-                          const apiBaseHost = (API_BASE && API_BASE.startsWith('http')) ? new URL(API_BASE).host : null;
-                          if (parsed.origin === pageOrigin || (apiBaseHost && parsed.host === apiBaseHost)) href = u.url;
-                        } catch (e) { href = ''; }
-                      }
-                      if (!href) {
-                        // fallback proxied path so CRA dev-server will forward to backend in dev
-                        href = API_BASE ? `${API_BASE}/api/quote-files/${encodeURIComponent(meta.quoteNo || routeQuoteNo)}/files/${encodeURIComponent(u.name || u.filename || '')}` : `/api/quote-files/${encodeURIComponent(meta.quoteNo || routeQuoteNo)}/files/${encodeURIComponent(u.name || u.filename || '')}`;
-                      }
-                      if (href.startsWith('https://localhost') || href.startsWith('https://127.0.0.1')) {
-                        href = href.replace(/^https:/, 'http:');
-                      }
-                      return (
+                {(() => {
+                  // Merge serverFiles (persisted) with transient uploads, avoiding obvious duplicates by filename
+                  const combined = [
+                    ...serverFiles,
+                    ...uploads.filter(u => !serverFiles.some(sf => (sf.name || '') === (u.name || u.originalname || u.filename)))
+                  ];
+                  return combined.map((u, idx) => {
+                    const filename = u.name || u.originalname || u.fileName || u.filename || '';
+                    // Try to find a 256 preview URL (backend includes `previews` array or preview keys)
+                    const previewCandidate = (u.previews && Array.isArray(u.previews) && (u.previews.find(p => String(p.size_key) === '256') || u.previews[0])) || null;
+                    const previewUrl = previewCandidate?.url || u.preview256 || null;
+                    // link href: prefer absolute URL if it's same-origin or points to configured API host; otherwise produce proxied relative path
+                    const pageOrigin = window.location.origin;
+                    let href = '';
+                    if (u?.url && String(u.url).startsWith('http')) {
+                      try {
+                        const parsed = new URL(u.url);
+                        const apiBaseHost = (API_BASE && API_BASE.startsWith('http')) ? new URL(API_BASE).host : null;
+                        if (parsed.origin === pageOrigin || (apiBaseHost && parsed.host === apiBaseHost)) href = u.url;
+                      } catch (e) { href = ''; }
+                    }
+                    if (!href) {
+                      href = API_BASE ? `${API_BASE}/api/quote-files/${encodeURIComponent(meta.quoteNo || routeQuoteNo)}/files/${encodeURIComponent(filename)}` : `/api/quote-files/${encodeURIComponent(meta.quoteNo || routeQuoteNo)}/files/${encodeURIComponent(filename)}`;
+                    }
+                    if (href.startsWith('https://localhost') || href.startsWith('https://127.0.0.1')) href = href.replace(/^https:/, 'http:');
+
+                    return (
+                      <div
+                        key={`${filename}-${idx}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          border: '1px solid #e5e7eb',
+                          borderRadius: 8,
+                          padding: '6px 10px'
+                        }}
+                        onMouseEnter={() => { if (previewUrl) setHoverPreviewUrl(previewUrl); }}
+                        onMouseLeave={() => { setHoverPreviewUrl(null); }}
+                      >
                         <a
                           href={href}
                           target="_blank"
                           rel="noreferrer noopener"
-                          style={{ textDecoration: 'none', color: '#111' }}
+                          style={{ textDecoration: 'none', color: '#111', display: 'inline-flex', alignItems: 'center', gap: 8 }}
                           title="Open uploaded file"
+                          onClick={(e) => { 
+                            // open modal instead of navigating when there is a preview available
+                            if (previewUrl) { e.preventDefault(); setViewerFile(u); setViewerOpen(true); }
+                          }}
                         >
-                          {u.originalname || u.name}
+                          {filename || 'file'}
+                          {/* Inline small preview thumbnail when available and hovered */}
+                          {previewUrl && hoverPreviewUrl === previewUrl && (
+                            <img src={previewUrl} alt="preview" style={{ width: 128, height: 'auto', borderRadius: 6, objectFit: 'cover', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }} />
+                          )}
                         </a>
-                      );
-                    })()}
-                    <button
-                      type="button"
-                      onClick={() => setUploads(prev => prev.filter((_, i) => i !== idx))}
-                      title="Remove from this list"
-                      style={{ border: 'none', background: 'transparent', color: '#b00020', cursor: 'pointer', fontWeight: 700 }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+                        {/* Only allow removing transient uploads (not persisted server files) */}
+                        {uploads.includes(u) && (
+                          <button
+                            type="button"
+                            onClick={() => setUploads(prev => prev.filter(x => x !== u))}
+                            title="Remove from this list"
+                            style={{ border: 'none', background: 'transparent', color: '#b00020', cursor: 'pointer', fontWeight: 700 }}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
+
+            {/* File viewer modal */}
+            <FileViewerModal open={viewerOpen} onClose={() => setViewerOpen(false)} file={viewerFile} quoteNo={meta.quoteNo || routeQuoteNo} />
 
           <div style={grid2}>
             <div>

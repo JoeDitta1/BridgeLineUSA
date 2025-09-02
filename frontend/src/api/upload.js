@@ -1,5 +1,6 @@
 // client/src/api/upload.js
-const API_BASE = process.env.REACT_APP_API_BASE || '';
+// Prefer Vite-style env (import.meta.env.VITE_API_BASE) when available, fall back to CRA REACT_APP_API_BASE
+const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) || (process.env.REACT_APP_API_BASE || '');
 
 /**
  * Upload a single file to /api/upload (field name: "file")
