@@ -1,56 +1,98 @@
 // frontend/src/pages/QuoteFolderView.jsx
-import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useCallback } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import FileUploadPad from "../components/FileUploadPad";
 import { filePathToUrl } from "../lib/fileUrls";
-
-// Prefer Vite env when available, fall back to CRA REACT_APP_API_BASE. Keep empty string to use dev-server proxy.
-const API_BASE = ((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) || process.env.REACT_APP_API_BASE || '').replace(/\/+$/, '');
+import { API_BASE } from "../config/apiBase";
 
 export default function QuoteFolderView() {
-  const { customerName, quoteNo, section } = useParams();
+  const params = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
-  // If the user selected the 'Quote Form' folder, redirect to the canonical
-  // quote editor route so the QuoteForm component handles hydration from _meta.json.
+  const quoteNo = params.quoteNo || "";
+  const subdir = params.subdir || "drawings";
+  // robust customer fallback: route param OR parse from URL
+  let customer = params.customer || "";
+  if (!customer && location?.pathname) {
+    const m = location.pathname.match(/\/quotes\/customers\/([^/]+)\//i);
+    if (m && m[1]) customer = decodeURIComponent(m[1]);
+  }
+  const activeSubdir = subdir;
   React.useEffect(() => {
-    if (section === 'quote-form') {
+    if (activeSubdir === 'quote-form') {
       navigate(`/quote/${encodeURIComponent(quoteNo)}`);
     }
-  }, [section, quoteNo, navigate]);
+  }, [activeSubdir, quoteNo, navigate]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [files, setFiles] = useState([]);
 
+  const fetchFiles = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const url = `${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/files?subdir=${encodeURIComponent(activeSubdir)}&customer=${encodeURIComponent(customer || '')}`;
+      const res = await fetch(url, { credentials: "include" });
+      const json = await res.json().catch(() => []);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const out = Array.isArray(json) ? json : (json && json.files ? json.files : []);
+      setFiles(out);
+    } catch (e) {
+      setError(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [customer, quoteNo, activeSubdir]);
+
   useEffect(() => {
     let alive = true;
     (async () => {
-      setLoading(true); setError("");
-      try {
-        const url = `${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/files?customer=${encodeURIComponent(customerName)}&section=${encodeURIComponent(section)}`;
-        const res = await fetch(url, { credentials: "include" });
-        const json = await res.json().catch(() => []);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        if (!alive) return;
-        setFiles(Array.isArray(json) ? json : []);
-      } catch (e) {
-        if (!alive) return;
-        setError(e?.message || String(e));
-      } finally {
-        if (alive) setLoading(false);
-      }
+      if (!alive) return;
+      await fetchFiles();
     })();
     return () => { alive = false; };
-  }, [customerName, quoteNo, section]);
+  }, [fetchFiles]);
 
   return (
-    <div style={{ padding: 20, maxWidth: 900, margin: "0 auto" }}>
-      <button
-        onClick={() => navigate(`/quotes/customers/${encodeURIComponent(customerName)}`)}
-        style={{ padding:"8px 12px", border:"1px solid #d1d5db", borderRadius:8, background:"#f9fafb", cursor:"pointer" }}
-      >
-        ← Back
-      </button>
+    <div style={{ padding: 20, maxWidth: 900, margin: "0 auto", position: 'relative' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button
+          onClick={() => navigate(`/quotes/customers/${encodeURIComponent(customer || '')}`)}
+          style={{ padding:"8px 12px", border:"1px solid #d1d5db", borderRadius:8, background:"#f9fafb", cursor:"pointer" }}
+        >
+          ← Back
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate(`/quote/${encodeURIComponent(quoteNo)}`)}
+          className="mb-4 px-4 py-2 rounded-lg border bg-white shadow-sm hover:bg-gray-100"
+          style={{ padding: '8px 12px', borderRadius: 8 }}
+        >
+          Back to Quote Form
+        </button>
+      </div>
 
-      <h1 style={{ marginTop: 12 }}>{customerName} / {quoteNo} / {section}</h1>
+      <h1 style={{ marginTop: 12 }}>{customer || ''} / {quoteNo} / {activeSubdir}</h1>
+
+      {/* Upload pad for common quote sub-folders */}
+      {(() => {
+        const allowed = ['uploads', 'vendor-quotes', 'quality-info', 'customer-notes', 'photos', 'exports', 'internal-notes', 'change-orders', 'drawings'];
+        if (!activeSubdir) return null;
+        const key = String(activeSubdir).toLowerCase();
+        if (!allowed.includes(key)) return null;
+        return (
+          <div style={{ position: 'absolute', top: 20, right: 20, width: 360, zIndex: 40, borderRadius: 10, padding: 8, background: 'transparent', border: '2px solid #0b1220', boxShadow: '0 6px 16px rgba(2,6,23,0.12)' }}>
+            <FileUploadPad
+              quoteNo={quoteNo}
+              subdir={key}
+              customerName={customer}
+              accept="*"
+              multiple={true}
+              onComplete={() => { fetchFiles(); }}
+              onError={(e) => console.error('Upload error', e)}
+            />
+          </div>
+        );
+      })()}
 
       {loading && <div>Loading…</div>}
       {error && <div style={{ color:"#b00020" }}>Failed: {error}</div>}

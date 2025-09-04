@@ -1,7 +1,7 @@
 {
   "name": "BridgeLineUSA Dev Container",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
-  "forwardPorts": [4000],
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "forwardPorts": [3000, 4000],
   "postCreateCommand": "echo 'Devcontainer ready'",
   "customizations": {
     "vscode": {

@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import Select from 'react-select';
-import UploadButton from '../components/UploadButton';
+import FileUploadPad from '../components/FileUploadPad';
 import FileViewerModal from '../components/FileViewerModal';
 import * as priceHistory from '../utils/priceHistory';
 import jfetch from '../lib/jfetch';
@@ -951,7 +951,7 @@ export default function QuoteForm() {
   }
 
   /* ------------------------------- UI STYLES ------------------------------- */
-  const container = { padding: '20px', maxWidth: '1200px', margin: 'auto', fontFamily: 'Arial, sans-serif' };
+  const container = { padding: '20px', maxWidth: '1200px', margin: 'auto', fontFamily: 'Arial, sans-serif', position: 'relative' };
   const card = { border: '1px solid #e5e7eb', borderRadius: 10, background: '#fff', padding: 16, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' };
   const sectionTitle = { fontSize: 18, fontWeight: 700, marginBottom: 10 };
   const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 };
@@ -980,10 +980,10 @@ export default function QuoteForm() {
         <div style={card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between', marginBottom: 6 }}>
             <h2 style={sectionTitle}>Step 1 — Quote Overview</h2>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
               {/* Quick Save buttons */}
               <button
-                style={button}
+                style={{ ...button, padding: '6px 10px', fontSize: 13 }}
                 disabled={saving}
                 onClick={() => handleSave('Draft', { goto: 'stay' })}
                 title="Create a quote number now and come back later"
@@ -991,7 +991,7 @@ export default function QuoteForm() {
                 {saving ? 'Saving…' : 'Quick Save Draft'}
               </button>
               <button
-                style={primary}
+                style={{ ...primary, padding: '6px 10px', fontSize: 13 }}
                 disabled={saving}
                 onClick={() => handleSave('Finalized', { goto: 'stay' })}
                 title="Finalize & save the quote number quickly"
@@ -999,26 +999,30 @@ export default function QuoteForm() {
                 {saving ? 'Saving…' : 'Quick Finalize & Save'}
               </button>
 
-              {/* UPDATED: uploads to the quote's /uploads subfolder */}
-              <UploadButton
-                quoteNo={meta.quoteNo || routeQuoteNo || ''}
-                subdir="uploads"
-                onUploaded={(items) => {
-                  // Defensive: ensure items is an array before merging
-                  const list = Array.isArray(items) ? items : (items ? [items] : []);
-                  setUploads(prev => [...list, ...prev]);
-                }}
-              />
-              {/* Quick drawings uploader — saves into Quote Form/Drawings */}
-              <UploadButton
+              {/* Upload area boxed and aligned with buttons */}
+              <div style={{ border: '2px solid #0b1220', borderRadius: 10, padding: 8, background: 'transparent', display: 'flex', alignItems: 'center', flexDirection: 'column', marginLeft: 4 }}>
+                <FileUploadPad
                 quoteNo={meta.quoteNo || routeQuoteNo || ''}
                 subdir="drawings"
-                onUploaded={(items) => {
+                accept=".pdf,.dxf,.dwg,.png,.jpg,.jpeg"
+                multiple={true}
+                customerName={meta.customerName || ''}
+                onComplete={(items) => {
                   // merge drawings into uploads list too (they're attachments)
                   const list = Array.isArray(items) ? items : (items ? [items] : []);
                   setUploads(prev => [...list, ...prev]);
                 }}
-              />
+                onError={(err) => console.error(err)}
+                />
+                <button
+                  type="button"
+                  onClick={() => navigate(`/quotes/customers/${encodeURIComponent(meta.customerName || pre.customerName || '')}/${encodeURIComponent(meta.quoteNo || routeQuoteNo || '')}/drawings`)}
+                  className="mt-4 px-4 py-2 rounded-lg border bg-white shadow-sm hover:bg-gray-100"
+                  style={{ marginTop: 8 }}
+                >
+                  Open Drawings Folder
+                </button>
+              </div>
             </div>
           </div>
 
