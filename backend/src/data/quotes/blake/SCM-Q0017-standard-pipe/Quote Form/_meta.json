@@ -1,0 +1,102 @@
+{
+  "saved_at": "2025-09-01T07:13:59.513Z",
+  "quote": {
+    "id": 17,
+    "quote_no": "SCM-Q0017",
+    "customer_name": "Blake",
+    "description": "Standard Pipe",
+    "requested_by": "Joe",
+    "estimator": "Joe",
+    "date": "2025-09-01",
+    "status": "draft",
+    "sales_order_no": null,
+    "rev": 0,
+    "created_at": "2025-09-01 06:04:24",
+    "storage_key_root": null,
+    "version_current": null,
+    "qc": null,
+    "totals": null
+  },
+  "form": {
+    "meta": {
+      "quoteNo": "SCM-Q0017",
+      "date": "2025-09-01",
+      "customerName": "Blake",
+      "estimatedBy": "Joe",
+      "requestor": "Joe",
+      "partNumber": "1624 5205 00",
+      "revision": "",
+      "description": "Standard Pipe",
+      "quality": "",
+      "requireSA": false,
+      "domesticOnly": false,
+      "originRestriction": "",
+      "receivingLaborHours": "",
+      "receivingRate": "75",
+      "notes": "Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.",
+      "paymentTerms": "",
+      "commissionPct": "",
+      "breakInFee": "",
+      "freightMethod": "",
+      "freightAmount": "",
+      "salesTaxPct": ""
+    },
+    "rows": [
+      {
+        "_uiOpen": true,
+        "_uiMarkupPct": "",
+        "itemNo": "",
+        "material": {
+          "label": "W-Beam - W4x13",
+          "value": "W-Beam|W4x13",
+          "familyKey": "W-Beam",
+          "keywords": [
+            "w-beam",
+            "w4x13",
+            "beam",
+            "wide flange",
+            "w shape"
+          ],
+          "type": "W-Beam",
+          "category": "W-Beam",
+          "size": "W4x13",
+          "description": "W4x13",
+          "unit_type": "Per Foot",
+          "weight_per_ft": 13,
+          "raw": {
+            "type": "W-Beam",
+            "category": "W-Beam",
+            "size": "W4x13",
+            "description": "W4x13",
+            "unit_type": "Per Foot",
+            "label": "W-Beam - W4x13",
+            "value": "W-Beam|W4x13",
+            "weight_per_ft": 13
+          },
+          "source": "server-catalog",
+          "group": "Materials Catalog (from JSON)"
+        },
+        "unitType": "Per Foot",
+        "grade": "A992",
+        "lengthFt": "",
+        "qty": "1",
+        "lengthIn": "",
+        "widthIn": "",
+        "heightIn": "",
+        "pricePerFt": "",
+        "pricePerLb": ".65",
+        "priceEach": "",
+        "totalWeight": "130.00",
+        "materialCost": "84.50",
+        "_costEach": "84.50",
+        "_outCost": 0,
+        "_procCost": 0,
+        "processes": [],
+        "outsourcing": [],
+        "padConventional": false,
+        "length_value": "10"
+      }
+    ],
+    "nde": []
+  }
+}

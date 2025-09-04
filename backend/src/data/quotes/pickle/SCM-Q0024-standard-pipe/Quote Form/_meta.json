@@ -1,0 +1,89 @@
+{
+  "saved_at": "2025-09-01T06:57:57.506Z",
+  "quote": {
+    "id": 26,
+    "quote_no": "SCM-Q0024",
+    "customer_name": "Pickle",
+    "description": "Standard Pipe",
+    "requested_by": "Joe",
+    "estimator": null,
+    "date": "2025-09-01",
+    "status": "draft",
+    "sales_order_no": null,
+    "rev": 0,
+    "created_at": "2025-09-01 06:57:57",
+    "storage_key_root": null,
+    "version_current": null,
+    "qc": null,
+    "totals": null
+  },
+  "form": {
+    "meta": {
+      "quoteNo": "SCM-Q0024",
+      "date": "2025-09-01",
+      "customerName": "Pickle",
+      "estimatedBy": "",
+      "requestor": "Joe",
+      "partNumber": "1624 5205 00",
+      "revision": "",
+      "description": "Standard Pipe",
+      "quality": "",
+      "requireSA": false,
+      "domesticOnly": false,
+      "originRestriction": "",
+      "receivingLaborHours": "",
+      "receivingRate": "75",
+      "notes": "Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.",
+      "paymentTerms": "",
+      "commissionPct": "",
+      "breakInFee": "",
+      "freightMethod": "",
+      "freightAmount": "",
+      "salesTaxPct": ""
+    },
+    "rows": [
+      {
+        "itemNo": "",
+        "material": {
+          "label": "Plate - 5/8\"",
+          "value": "Plate|5/8\"",
+          "familyKey": "Plate",
+          "keywords": [
+            "plate",
+            "plate 5/8\"",
+            "5/8\""
+          ],
+          "type": "Plate",
+          "size": "5/8\"",
+          "description": "Plate 5/8\"",
+          "thicknessIn": 0.625,
+          "density": 0.283,
+          "weight_per_sqin": 0.176875,
+          "source": "generic-plate",
+          "group": "Generic Plate (Thickness Catalog)"
+        },
+        "unitType": "Sq In",
+        "grade": "A36",
+        "lengthFt": "",
+        "qty": "1",
+        "lengthIn": "20",
+        "widthIn": "10",
+        "heightIn": "",
+        "pricePerFt": "",
+        "pricePerLb": ".65",
+        "priceEach": "",
+        "totalWeight": "40.86",
+        "materialCost": "26.56",
+        "_costEach": "26.56",
+        "_outCost": 0,
+        "_procCost": 0,
+        "processes": [],
+        "outsourcing": [],
+        "padConventional": true,
+        "_uiOpen": true,
+        "_uiMarkupPct": "20"
+      }
+    ],
+    "nde": []
+  }
+}
