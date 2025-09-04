@@ -92,9 +92,11 @@ export default function QuoteFolderView() {
                 if (!entry) return { ok: false, key: k, error: 'not found' };
                 const { f, filename } = entry;
                 const subdir = f.subdir || '';
+                // include the customer as a query param to help the backend resolve the filesystem path
+                const customerQuery = customer ? `?customer=${encodeURIComponent(customer)}` : '';
                 const url = subdir
-                  ? `${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(subdir)}/${encodeURIComponent(filename)}`
-                  : `${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(filename)}`;
+                  ? `${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(subdir)}/${encodeURIComponent(filename)}${customerQuery}`
+                  : `${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(filename)}${customerQuery}`;
                 const res = await fetch(url, { method: 'DELETE', credentials: 'include' });
                 if (!res.ok) return { ok: false, key: k, status: res.status };
                 const json = await res.json().catch(() => ({ ok: true }));
