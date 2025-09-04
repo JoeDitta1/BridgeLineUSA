@@ -134,7 +134,7 @@ class LocalFsDriver {
       try { files = await fs.readdir(orig); } catch {}
       for (const name of files) {
         const full = path.join(orig, name);
-        const stat = await fs.promises.stat(full).catch(() => null) || {};
+    const stat = await fs.stat(full).catch(() => null) || {};
         const relKey = path.relative(this.quoteRoot, full).split(path.sep).join('/');
         const base = path.basename(full);
         const nice = base.includes('__') ? base.split('__').slice(-1)[0] : base;
@@ -153,12 +153,12 @@ class LocalFsDriver {
     }
 
     // pattern 2 (fallback): flat files directly under <base>
-    let flatFiles = [];
-    try { flatFiles = await fs.promises.readdir(baseDir); } catch {}
+  let flatFiles = [];
+  try { flatFiles = await fs.readdir(baseDir); } catch {}
     for (const name of flatFiles) {
       if (name === '.' || name === '..') continue;
       const full = path.join(baseDir, name);
-      const stat = await fs.promises.stat(full).catch(() => null);
+  const stat = await fs.stat(full).catch(() => null);
       if (stat && stat.isFile()) {
         const relKey = path.relative(this.quoteRoot, full).split(path.sep).join('/');
         const base = path.basename(full);
