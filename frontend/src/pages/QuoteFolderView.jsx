@@ -81,8 +81,9 @@ export default function QuoteFolderView() {
         const key = String(activeSubdir).toLowerCase();
         if (!allowed.includes(key)) return null;
         return (
-          // Use pointerEvents none on the wrapper so transparent areas don't block underlying links.
-          <div style={{ position: 'absolute', top: 20, right: 20, width: 360, zIndex: 40, borderRadius: 10, padding: 8, background: 'transparent', border: '2px solid #0b1220', boxShadow: '0 6px 16px rgba(2,6,23,0.12)', pointerEvents: 'none' }}>
+          // Pin the uploader to the top-right of the page and make it a bit smaller so it doesn't overlap the title.
+          // Keep pointerEvents: 'none' on the wrapper so transparent areas don't block underlying links; inner pad remains interactive.
+          <div style={{ position: 'fixed', top: 80, right: 24, width: 300, zIndex: 1000, borderRadius: 8, padding: 6, background: 'rgba(255,255,255,0.96)', border: '1px solid #0b1220', boxShadow: '0 6px 16px rgba(2,6,23,0.08)', pointerEvents: 'none' }}>
             <FileUploadPad
               quoteNo={quoteNo}
               subdir={key}
