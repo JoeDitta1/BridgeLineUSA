@@ -115,11 +115,19 @@ export default function QuoteFolderView() {
             const name = f.label || f.name || f.filename || f.base || (f.path || "").split("/").pop();
             return (
               <li key={i} style={{ border:"1px solid #e5e7eb", borderRadius:10, padding:12, marginBottom:8 }}>
-                <div style={{ fontWeight:600 }}>{name || "(file)"}</div>
-                <div style={{ fontSize:12, color:"#6b7280" }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontWeight:600 }}>{name || "(file)"}</div>
+                  {url && (
+                    <div style={{ marginLeft: 12 }}>
+                      <a href={url} target="_blank" rel="noreferrer" style={{ position: 'relative', zIndex: 1001, pointerEvents: 'auto', textDecoration: 'none', color: '#2563eb', fontWeight: 600 }}>
+                        Open
+                      </a>
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontSize:12, color:"#6b7280", marginTop: 6 }}>
                   {f.size != null ? `${f.size} bytes` : ""} {f.mtime ? ` • ${new Date(f.mtime).toLocaleString()}` : ""}
                 </div>
-                {url && <div style={{ marginTop:8 }}><a href={url} target="_blank" rel="noreferrer" style={{ position: 'relative', zIndex: 1001, pointerEvents: 'auto' }}>Open</a></div>}
               </li>
             );
           })}
