@@ -27,6 +27,9 @@ export default function QuoteFolderView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [files, setFiles] = useState([]);
+  // keys of selected files for deletion: stored as array of "subdir::filename"
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchFiles = useCallback(async () => {
     setLoading(true); setError("");
@@ -69,6 +72,52 @@ export default function QuoteFolderView() {
           style={{ padding: '8px 12px', borderRadius: 8 }}
         >
           Back to Quote Form
+        </button>
+        {/* Delete selected files button */}
+        <button
+          type="button"
+          onClick={async () => {
+            if (!selectedKeys.length) return;
+            if (!window.confirm(`Delete ${selectedKeys.length} file(s)? This action is permanent.`)) return;
+            setDeleting(true);
+            try {
+              // build map from key -> file object
+              const keyToFile = new Map(files.map(f => {
+                const filename = f.label || f.name || f.filename || f.base || (f.path || "").split("/").pop();
+                const key = `${f.subdir || ''}::${filename}`;
+                return [key, { f, filename }];
+              }));
+              const results = await Promise.all(selectedKeys.map(async (k) => {
+                const entry = keyToFile.get(k);
+                if (!entry) return { ok: false, key: k, error: 'not found' };
+                const { f, filename } = entry;
+                const subdir = f.subdir || '';
+                const url = subdir
+                  ? `${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(subdir)}/${encodeURIComponent(filename)}`
+                  : `${API_BASE}/api/quotes/${encodeURIComponent(quoteNo)}/files/${encodeURIComponent(filename)}`;
+                const res = await fetch(url, { method: 'DELETE', credentials: 'include' });
+                if (!res.ok) return { ok: false, key: k, status: res.status };
+                const json = await res.json().catch(() => ({ ok: true }));
+                return { ok: json.ok !== false, key: k, json };
+              }));
+              const failed = results.filter(r => !r.ok);
+              if (failed.length) {
+                window.alert(`Failed to delete ${failed.length} file(s). See console for details.`);
+                console.warn('delete failures', failed);
+              }
+              setSelectedKeys([]);
+              await fetchFiles();
+            } catch (e) {
+              console.error('Delete selected failed', e);
+              window.alert('Delete failed: ' + (e?.message || e));
+            } finally {
+              setDeleting(false);
+            }
+          }}
+          disabled={selectedKeys.length === 0 || deleting}
+          style={{ padding: '8px 10px', borderRadius: 8, background: selectedKeys.length ? '#ef4444' : '#f3f4f6', color: selectedKeys.length ? '#fff' : '#374151', border: '1px solid #e5e7eb', cursor: selectedKeys.length ? 'pointer' : 'default' }}
+        >
+          {deleting ? 'Deleting…' : `Delete Selected (${selectedKeys.length})`}
         </button>
       </div>
 
@@ -114,10 +163,22 @@ export default function QuoteFolderView() {
             // and prefix with API_BASE so the browser navigates to backend (not the SPA host).
             const url = (raw && String(raw).startsWith('/')) ? `${API_BASE.replace(/\/+$/, '')}${raw}` : raw;
             const name = f.label || f.name || f.filename || f.base || (f.path || "").split("/").pop();
+            const key = `${f.subdir || ''}::${name}`;
+            const checked = selectedKeys.includes(key);
             return (
               <li key={i} style={{ border:"1px solid #e5e7eb", borderRadius:10, padding:12, marginBottom:8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontWeight:600 }}>{name || "(file)"}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setSelectedKeys(prev => prev.includes(key) ? prev.filter(k=>k!==key) : [...prev, key]);
+                      }}
+                      style={{ width: 16, height: 16 }}
+                    />
+                    <div style={{ fontWeight:600 }}>{name || "(file)"}</div>
+                  </div>
                   {url && (
                     <div style={{ marginLeft: 12 }}>
                       <a href={url} target="_blank" rel="noreferrer" style={{ position: 'relative', zIndex: 1001, pointerEvents: 'auto', textDecoration: 'none', color: '#2563eb', fontWeight: 600 }}>
