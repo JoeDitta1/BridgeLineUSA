@@ -476,6 +476,8 @@ export default function QuoteForm() {
   const [uploads, setUploads] = useState([]); // [{name,url,subdir,size,mtime}]
   // Files persisted on the server for this quote (read-only listing)
   const [serverFiles, setServerFiles] = useState([]);
+  // Toggle showing uploaded files inline on the Quote form (hide by default to avoid long lists)
+  const SHOW_UPLOADED_IN_QUOTEFORM = false;
   // Hover preview URL (small thumbnail, 256px) to show when user hovers a file
   const [hoverPreviewUrl, setHoverPreviewUrl] = useState(null);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -1007,10 +1009,17 @@ export default function QuoteForm() {
                 accept=".pdf,.dxf,.dwg,.png,.jpg,.jpeg"
                 multiple={true}
                 customerName={meta.customerName || ''}
-                onComplete={(items) => {
-                  // merge drawings into uploads list too (they're attachments)
-                  const list = Array.isArray(items) ? items : (items ? [items] : []);
-                  setUploads(prev => [...list, ...prev]);
+                onComplete={async (items) => {
+                  // Don't display uploaded files on the Quote form to avoid huge lists.
+                  // Still refresh the server-side listing so the folder view shows them elsewhere.
+                  try {
+                    const q = (meta.quoteNo || routeQuoteNo || '').trim();
+                    if (!q) return;
+                    const list = await jfetch(`${API_BASE}/api/quotes/${encodeURIComponent(q)}/files`);
+                    if (Array.isArray(list)) setServerFiles(list);
+                  } catch (e) {
+                    console.warn('Failed to refresh server files after upload:', e?.message || e);
+                  }
                 }}
                 onError={(err) => console.error(err)}
                 />
@@ -1027,7 +1036,7 @@ export default function QuoteForm() {
           </div>
 
           {/* Uploaded files list */}
-          {(serverFiles.length > 0 || uploads.length > 0) && (
+          {(SHOW_UPLOADED_IN_QUOTEFORM && (serverFiles.length > 0 || uploads.length > 0)) && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Uploaded:</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

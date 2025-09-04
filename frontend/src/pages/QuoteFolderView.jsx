@@ -10,7 +10,8 @@ export default function QuoteFolderView() {
   const location = useLocation();
   const navigate = useNavigate();
   const quoteNo = params.quoteNo || "";
-  const subdir = params.subdir || "drawings";
+  // Route may use :subdir or :section depending on where it's linked from; prefer provided param, then section, then default to drawings
+  const subdir = params.subdir || params.section || "drawings";
   // robust customer fallback: route param OR parse from URL
   let customer = params.customer || "";
   if (!customer && location?.pathname) {
