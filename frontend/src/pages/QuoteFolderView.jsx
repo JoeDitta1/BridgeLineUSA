@@ -84,7 +84,7 @@ export default function QuoteFolderView() {
           // Pin the uploader to the top-right of the page and make it a bit smaller so it doesn't overlap the title.
           // Keep pointerEvents: 'none' on the wrapper so transparent areas don't block underlying links; inner pad remains interactive.
           // Position the uploader at the very top-right (near the Back buttons) so it doesn't overlap file rows.
-          <div style={{ position: 'fixed', top: 18, right: 24, width: 300, zIndex: 1000, borderRadius: 8, padding: 6, background: 'rgba(255,255,255,0.96)', border: '1px solid #0b1220', boxShadow: '0 6px 16px rgba(2,6,23,0.08)', pointerEvents: 'none' }}>
+          <div style={{ position: 'fixed', top: 18, right: 24, width: 150, zIndex: 1000, borderRadius: 8, padding: 4, background: 'rgba(255,255,255,0.96)', border: '1px solid #0b1220', boxShadow: '0 6px 16px rgba(2,6,23,0.08)', pointerEvents: 'none' }}>
             <FileUploadPad
               quoteNo={quoteNo}
               subdir={key}
