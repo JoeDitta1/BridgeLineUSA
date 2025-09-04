@@ -1,0 +1,68 @@
+{
+  "saved_at": "2025-09-04T11:13:06.076Z",
+  "quote": {
+    "id": 19,
+    "quote_no": "SCM-Q0016",
+    "customer_name": "Atas",
+    "description": "Standard Pipe",
+    "requested_by": "Joe",
+    "estimator": "Joe",
+    "date": "2025-09-03",
+    "status": "draft",
+    "sales_order_no": null,
+    "rev": 0,
+    "created_at": "2025-08-27 20:39:10"
+  },
+  "form": {
+    "meta": {
+      "quoteNo": "SCM-Q0016",
+      "date": "2025-09-03",
+      "customerName": "Atas",
+      "estimatedBy": "Joe",
+      "requestor": "Joe",
+      "partNumber": "1624 5047 72",
+      "revision": "",
+      "description": "Standard Pipe",
+      "quality": "",
+      "requireSA": false,
+      "domesticOnly": false,
+      "originRestriction": "",
+      "receivingLaborHours": "",
+      "receivingRate": "75",
+      "notes": "Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.",
+      "paymentTerms": "",
+      "commissionPct": "",
+      "breakInFee": "",
+      "freightMethod": "",
+      "freightAmount": "",
+      "salesTaxPct": ""
+    },
+    "rows": [
+      {
+        "_uiOpen": true,
+        "_uiMarkupPct": "",
+        "itemNo": "",
+        "material": null,
+        "unitType": "Per Foot",
+        "grade": "",
+        "lengthFt": "",
+        "qty": "",
+        "lengthIn": "",
+        "widthIn": "",
+        "heightIn": "",
+        "pricePerFt": "",
+        "pricePerLb": "",
+        "priceEach": "",
+        "totalWeight": "0.00",
+        "materialCost": "0.00",
+        "_costEach": "0.00",
+        "_outCost": 0,
+        "_procCost": 0,
+        "processes": [],
+        "outsourcing": [],
+        "padConventional": false
+      }
+    ],
+    "nde": []
+  }
+}

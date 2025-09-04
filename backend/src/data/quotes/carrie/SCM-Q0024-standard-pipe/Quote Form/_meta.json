@@ -1,0 +1,68 @@
+{
+  "saved_at": "2025-09-03T19:45:40.724Z",
+  "quote": {
+    "id": 27,
+    "quote_no": "SCM-Q0024",
+    "customer_name": "Carrie",
+    "description": null,
+    "requested_by": null,
+    "estimator": null,
+    "date": "2025-09-03",
+    "status": "draft",
+    "sales_order_no": null,
+    "rev": 0,
+    "created_at": "2025-08-29 14:35:15"
+  },
+  "form": {
+    "meta": {
+      "quoteNo": "SCM-Q0024",
+      "date": "2025-09-03",
+      "customerName": "Carrie",
+      "estimatedBy": "",
+      "requestor": "",
+      "partNumber": "",
+      "revision": "",
+      "description": "",
+      "quality": "",
+      "requireSA": false,
+      "domesticOnly": false,
+      "originRestriction": "",
+      "receivingLaborHours": "",
+      "receivingRate": "75",
+      "notes": "Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.",
+      "paymentTerms": "",
+      "commissionPct": "",
+      "breakInFee": "",
+      "freightMethod": "",
+      "freightAmount": "",
+      "salesTaxPct": ""
+    },
+    "rows": [
+      {
+        "itemNo": "",
+        "material": null,
+        "unitType": "Per Foot",
+        "grade": "",
+        "lengthFt": "",
+        "qty": "",
+        "lengthIn": "",
+        "widthIn": "",
+        "heightIn": "",
+        "pricePerFt": "",
+        "pricePerLb": "",
+        "priceEach": "",
+        "totalWeight": "0.00",
+        "materialCost": "0.00",
+        "_costEach": "0.00",
+        "_outCost": 0,
+        "_procCost": 0,
+        "processes": [],
+        "outsourcing": [],
+        "padConventional": false,
+        "_uiOpen": true,
+        "_uiMarkupPct": ""
+      }
+    ],
+    "nde": []
+  }
+}

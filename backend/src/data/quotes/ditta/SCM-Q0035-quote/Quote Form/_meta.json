@@ -1,0 +1,68 @@
+{
+  "saved_at": "2025-09-04T11:33:34.618Z",
+  "quote": {
+    "id": 49,
+    "quote_no": "SCM-Q0035",
+    "customer_name": "Ditta",
+    "description": null,
+    "requested_by": "Joe",
+    "estimator": null,
+    "date": "2025-09-04",
+    "status": "draft",
+    "sales_order_no": null,
+    "rev": 0,
+    "created_at": "2025-09-04 11:33:34"
+  },
+  "form": {
+    "meta": {
+      "quoteNo": "SCM-Q0035",
+      "date": "2025-09-04",
+      "customerName": "Ditta",
+      "estimatedBy": "",
+      "requestor": "Joe",
+      "partNumber": "",
+      "revision": "",
+      "description": "",
+      "quality": "",
+      "requireSA": false,
+      "domesticOnly": false,
+      "originRestriction": "",
+      "receivingLaborHours": "",
+      "receivingRate": "75",
+      "notes": "Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.",
+      "paymentTerms": "",
+      "commissionPct": "",
+      "breakInFee": "",
+      "freightMethod": "",
+      "freightAmount": "",
+      "salesTaxPct": ""
+    },
+    "rows": [
+      {
+        "itemNo": "",
+        "material": null,
+        "unitType": "Per Foot",
+        "grade": "",
+        "lengthFt": "",
+        "qty": "",
+        "lengthIn": "",
+        "widthIn": "",
+        "heightIn": "",
+        "pricePerFt": "",
+        "pricePerLb": "",
+        "priceEach": "",
+        "totalWeight": "0.00",
+        "materialCost": "0.00",
+        "_costEach": "0.00",
+        "_outCost": 0,
+        "_procCost": 0,
+        "processes": [],
+        "outsourcing": [],
+        "padConventional": false,
+        "_uiOpen": true,
+        "_uiMarkupPct": ""
+      }
+    ],
+    "nde": []
+  }
+}
