@@ -1,0 +1,68 @@
+{
+  "saved_at": "2025-09-04T14:46:11.276Z",
+  "quote": {
+    "id": 50,
+    "quote_no": "SCM-Q0036",
+    "customer_name": "Brown & Root",
+    "description": "Skid",
+    "requested_by": "Danny",
+    "estimator": "Tony",
+    "date": "2025-09-04",
+    "status": "draft",
+    "sales_order_no": null,
+    "rev": 0,
+    "created_at": "2025-09-04 14:46:07"
+  },
+  "form": {
+    "meta": {
+      "quoteNo": "SCM-Q0036",
+      "date": "2025-09-04",
+      "customerName": "Brown & Root",
+      "estimatedBy": "Tony",
+      "requestor": "Danny",
+      "partNumber": "1624 5047 72",
+      "revision": "",
+      "description": "Skid",
+      "quality": "AWS B31.1",
+      "requireSA": false,
+      "domesticOnly": false,
+      "originRestriction": "",
+      "receivingLaborHours": "",
+      "receivingRate": "75",
+      "notes": "Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.",
+      "paymentTerms": "Net 30",
+      "commissionPct": "",
+      "breakInFee": "",
+      "freightMethod": "",
+      "freightAmount": "",
+      "salesTaxPct": ""
+    },
+    "rows": [
+      {
+        "itemNo": "",
+        "material": null,
+        "unitType": "Per Foot",
+        "grade": "",
+        "lengthFt": "",
+        "qty": "",
+        "lengthIn": "",
+        "widthIn": "",
+        "heightIn": "",
+        "pricePerFt": "",
+        "pricePerLb": "",
+        "priceEach": "",
+        "totalWeight": "0.00",
+        "materialCost": "0.00",
+        "_costEach": "0.00",
+        "_outCost": 0,
+        "_procCost": 0,
+        "processes": [],
+        "outsourcing": [],
+        "padConventional": false,
+        "_uiOpen": true,
+        "_uiMarkupPct": ""
+      }
+    ],
+    "nde": []
+  }
+}

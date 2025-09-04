@@ -1,0 +1,28 @@
+
+> scm-ai-server@0.2.0 start
+> node src/index.js
+
+[DB] Using database at: /workspaces/BridgeLineUSA/backend/data/app.db
+[supabase] client configured
+[DB] migrate() executed; equipment table exists: true
+[Static] Disabled or build not found. (Set SERVE_FRONTEND=true after building the frontend.)
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 4000
+}
+
+Node.js v22.17.0

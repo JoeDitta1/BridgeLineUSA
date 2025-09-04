@@ -1,0 +1,19 @@
+
+> scm-ai-server@0.2.0 dev
+> node src/index.js
+
+[DB] Using database at: /workspaces/BridgeLineUSA/backend/data/app.db
+[DB] migrate() executed; equipment table exists: true
+[Static] Disabled or build not found. (Set SERVE_FRONTEND=true after building the frontend.)
+Server is running on http://localhost:4000
+Uploads: /workspaces/BridgeLineUSA/backend/uploads
+Quote folders: /workspaces/BridgeLineUSA/backend/data/quotes
+=== MATERIALS ROUTE HIT ===
+Looking for file at: /workspaces/BridgeLineUSA/frontend/src/data/materials.json
+=== MATERIALS ROUTE HIT ===
+Looking for file at: /workspaces/BridgeLineUSA/frontend/src/data/materials.json
+=== MATERIALS ROUTE HIT ===
+Looking for file at: /workspaces/BridgeLineUSA/frontend/src/data/materials.json
+Failed to write quote_revisions row: table quote_revisions has no column named idempotency_key
+=== MATERIALS ROUTE HIT ===
+Looking for file at: /workspaces/BridgeLineUSA/frontend/src/data/materials.json

@@ -1,0 +1,23 @@
+{
+  "saved_at": "2025-09-01T05:40:30.925Z",
+  "quote": {
+    "id": 12,
+    "quote_no": "SCM-Q0012",
+    "customer_name": "Test Cust",
+    "description": "Test X",
+    "requested_by": null,
+    "estimator": null,
+    "date": "2025-09-01",
+    "status": "Draft",
+    "sales_order_no": null,
+    "rev": 0,
+    "created_at": "2025-09-01 05:40:30",
+    "storage_key_root": null,
+    "version_current": null,
+    "qc": null,
+    "totals": null
+  },
+  "form": {
+    "foo": "bar"
+  }
+}

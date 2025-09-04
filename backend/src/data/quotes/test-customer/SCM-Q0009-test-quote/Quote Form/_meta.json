@@ -1,0 +1,19 @@
+{
+  "saved_at": "2025-09-01T05:09:58.227Z",
+  "quote": {
+    "id": 9,
+    "quote_no": "SCM-Q0009",
+    "customer_name": "Test Customer",
+    "description": "Test Quote",
+    "requested_by": null,
+    "estimator": null,
+    "date": "2025-09-01",
+    "status": "Draft",
+    "sales_order_no": null,
+    "rev": 0,
+    "created_at": "2025-09-01 05:09:58"
+  },
+  "form": {
+    "foo": "bar"
+  }
+}

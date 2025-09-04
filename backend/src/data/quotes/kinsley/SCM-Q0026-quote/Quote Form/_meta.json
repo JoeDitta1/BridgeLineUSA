@@ -1,0 +1,72 @@
+{
+  "saved_at": "2025-09-02T01:52:35.064Z",
+  "quote": {
+    "id": 29,
+    "quote_no": "SCM-Q0026",
+    "customer_name": "Kinsley",
+    "description": null,
+    "requested_by": "Joe",
+    "estimator": null,
+    "date": "2025-09-02",
+    "status": "draft",
+    "sales_order_no": null,
+    "rev": 0,
+    "created_at": "2025-09-02 01:15:47",
+    "storage_key_root": null,
+    "version_current": null,
+    "qc": null,
+    "totals": null
+  },
+  "form": {
+    "meta": {
+      "quoteNo": "SCM-Q0026",
+      "date": "2025-09-02",
+      "customerName": "Kinsley",
+      "estimatedBy": "",
+      "requestor": "Joe",
+      "partNumber": "",
+      "revision": "",
+      "description": "",
+      "quality": "",
+      "requireSA": false,
+      "domesticOnly": false,
+      "originRestriction": "",
+      "receivingLaborHours": "",
+      "receivingRate": "75",
+      "notes": "Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.",
+      "paymentTerms": "",
+      "commissionPct": "",
+      "breakInFee": "",
+      "freightMethod": "",
+      "freightAmount": "",
+      "salesTaxPct": ""
+    },
+    "rows": [
+      {
+        "_uiOpen": true,
+        "_uiMarkupPct": "",
+        "itemNo": "",
+        "material": null,
+        "unitType": "Per Foot",
+        "grade": "",
+        "lengthFt": "",
+        "qty": "",
+        "lengthIn": "",
+        "widthIn": "",
+        "heightIn": "",
+        "pricePerFt": "",
+        "pricePerLb": "",
+        "priceEach": "",
+        "totalWeight": "0.00",
+        "materialCost": "0.00",
+        "_costEach": "0.00",
+        "_outCost": 0,
+        "_procCost": 0,
+        "processes": [],
+        "outsourcing": [],
+        "padConventional": false
+      }
+    ],
+    "nde": []
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "quote-ai-service",
+  "version": "1.0.0",
+  "description": "A service for managing quotes with AI capabilities.",
+  "main": "backend/index.js",
+  "scripts": {
+    "start": "node backend/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "axios": "^0.21.1"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.7"
+  },
+  "keywords": [
+    "quotes",
+    "ai",
+    "service"
+  ],
+  "author": "Your Name",
+  "license": "ISC"
+}

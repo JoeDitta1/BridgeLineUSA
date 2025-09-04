@@ -1,0 +1,23 @@
+{
+  "name": "sqlite-sql-api",
+  "version": "1.0.0",
+  "description": "A simple API for managing API keys using SQLite.",
+  "main": "src/app.ts",
+  "scripts": {
+    "start": "ts-node src/app.ts",
+    "build": "tsc",
+    "migrate": "sqlite3 db.sqlite < migrations/sqlite/024_create_api_keys.sql"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "sqlite3": "^5.0.2",
+    "ts-node": "^10.0.0",
+    "typescript": "^4.4.4"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.11",
+    "@types/node": "^14.14.31"
+  },
+  "author": "",
+  "license": "ISC"
+}
