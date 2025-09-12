@@ -19,6 +19,7 @@ import adminRoute from './routes/adminRoute.js';
 import equipmentRoute from './routes/equipmentRoute.js';
 import systemMaterialsRoute from './routes/systemMaterialsRoute.js';
 import salesOrdersRoute from './routes/salesOrdersRoute.js';
+import backupRoute from './routes/backupRoute.js';
 
 /* ------------------------- ES module __dirname shim ------------------------ */
 const __filename = fileURLToPath(import.meta.url);
@@ -157,6 +158,11 @@ const QUOTES_FILES_ROOT = resolveFromBackend(quoteEnv);
 await fsPromises.mkdir(QUOTES_FILES_ROOT, { recursive: true });
 app.use('/files', express.static(QUOTES_FILES_ROOT));
 
+// ARCHIVES (for backup downloads)
+const ARCHIVES_DIR = '/workspaces/_archives';
+await fsPromises.mkdir(ARCHIVES_DIR, { recursive: true });
+app.use('/archives', express.static(ARCHIVES_DIR));
+
 // Expose resolved paths to routes if needed
 app.locals.paths = {
   uploadsDir: UPLOADS_DIR,
@@ -174,6 +180,7 @@ app.use('/api/admin', adminRoute); // admin endpoints
 app.use('/api/equipment', equipmentRoute); // equipment endpoints
 app.use('/api/system-materials', systemMaterialsRoute);
 app.use('/api/sales-orders', salesOrdersRoute);
+app.use('/api/backups', backupRoute); // backup system
 
 // File routes mounted under /api/quotes to match frontend expectations
 app.use('/api/quotes', quoteFilesRoute);
