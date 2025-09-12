@@ -189,46 +189,22 @@ function startBackupProcess(jobId, job) {
     
     addLog(jobId, { status: 'info', message: 'File size check passed. Starting backup...' });
     
-    // Build the backup script using worktree to avoid changing current branch
+    // Build the backup script using the original working approach
     const script = `
 set -euo pipefail
 cd /workspaces/BridgeLineUSA
 
-# Save original branch to restore context
+# Save original branch to restore later
 ORIG_BRANCH=$(git branch --show-current || echo "dev")
 echo "🏠 Current branch: $ORIG_BRANCH (will be preserved)"
 
 echo "🔄 Fetching all branches and tags..."
 git fetch --all --tags
 
-# Create temporary directory for isolated worktree
-TMP=$(mktemp -d)
-echo "📁 Created temporary worktree directory: $TMP"
+echo "🌿 Creating orphan branch: ${snapBranch}"
+git checkout --orphan "${snapBranch}"
 
-# Cleanup function
-cleanup() {
-  echo "🧹 Cleaning up temporary worktree..."
-  if [ -d "$TMP" ]; then
-    cd /workspaces/BridgeLineUSA
-    git worktree remove -f "$TMP" 2>/dev/null || true
-    rm -rf "$TMP" 2>/dev/null || true
-  fi
-  echo "🔄 Ensuring we're back on original branch: $ORIG_BRANCH"
-  git checkout "$ORIG_BRANCH" 2>/dev/null || true
-}
-
-# Set trap to always cleanup
-trap cleanup EXIT ERR
-
-echo "🌿 Creating isolated worktree for snapshot branch: ${snapBranch}"
-# Delete local branch if it exists (but keep remote)
-git branch -D "${snapBranch}" 2>/dev/null || true
-git worktree add -b "${snapBranch}" "$TMP" "$ORIG_BRANCH"
-
-echo "� Working in isolated directory: $TMP"
-cd "$TMP"
-
-echo "�📋 Adding files (respecting .gitignore)..."
+echo "📋 Adding files (respecting .gitignore)..."
 git add .
 
 echo "💾 Committing snapshot..."
@@ -238,14 +214,14 @@ echo "🚀 Pushing snapshot branch to origin..."
 git push -u origin "${snapBranch}"
 
 echo "📦 Creating git bundle..."
-cd /workspaces/BridgeLineUSA
 git bundle create "${bundlePath}" --all
 
-echo "🗜️  Creating zip archive from worktree..."
-cd "$TMP"
+echo "🗜️  Creating zip archive..."
 zip -r "${zipPath}" . -x ".git/*" "node_modules/*" "dist/*" "_archives/*" "backups/*" "*.log" "*.tmp"
 
-cd /workspaces/BridgeLineUSA
+echo "🔄 Restoring original branch: $ORIG_BRANCH"
+git checkout "$ORIG_BRANCH"
+
 echo "✅ Backup complete! Original branch ($ORIG_BRANCH) preserved."
     `.trim();
     
