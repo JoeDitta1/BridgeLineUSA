@@ -221,6 +221,8 @@ cleanup() {
 trap cleanup EXIT ERR
 
 echo "🌿 Creating isolated worktree for snapshot branch: ${snapBranch}"
+# Delete local branch if it exists (but keep remote)
+git branch -D "${snapBranch}" 2>/dev/null || true
 git worktree add -b "${snapBranch}" "$TMP" "$ORIG_BRANCH"
 
 echo "� Working in isolated directory: $TMP"
