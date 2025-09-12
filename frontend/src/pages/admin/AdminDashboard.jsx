@@ -34,6 +34,7 @@ export default function AdminDashboard() {
         <Link to="/admin/users" style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8 }}>Users</Link>
         <Link to="/admin/equipment" style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8 }}>Equipment</Link>
         <Link to="/admin/materials" style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8 }}>Materials</Link>
+        <Link to="/admin/backups" style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8, backgroundColor: "#e3f2fd" }}>Backups</Link>
         <Link to="/admin/deleted" style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8, backgroundColor: "#fff3cd" }}>Soft Deletes</Link>
       </div>
 

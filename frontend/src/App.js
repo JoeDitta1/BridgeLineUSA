@@ -25,6 +25,7 @@ import Users from "./pages/admin/Users";
 import Equipment from "./pages/admin/Equipment";
 import SystemMaterials from "./pages/admin/SystemMaterials";
 import SoftDeleteManager from "./pages/admin/SoftDeleteManager";
+import Backups from "./pages/admin/Backups";
 
 const MKT_AT_ROOT = process.env.REACT_APP_MARKETING_AT_ROOT === "true";
 
@@ -62,11 +63,10 @@ export default function App() {
   <Route path="/admin" element={<AdminDashboard />} />
   <Route path="/admin/settings" element={<Settings />} />
   <Route path="/admin/users" element={<Users />} />
-  <Route path="/admin/equipment" element={<Equipment />} />
-  <Route path="/admin/materials" element={<SystemMaterials />} />
-  <Route path="/admin/deleted" element={<SoftDeleteManager />} />
-
-      {/* Other modules (stubs for now) */}
+      <Route path="/admin/equipment" element={<Equipment />} />
+      <Route path="/admin/materials" element={<SystemMaterials />} />
+      <Route path="/admin/backups" element={<Backups />} />
+      <Route path="/admin/deleted" element={<SoftDeleteManager />} />      {/* Other modules (stubs for now) */}
   {/* Sales Orders */}
   <Route path="/sales-orders" element={<SalesOrdersLog />} />
   <Route path="/sales-orders/new" element={<WorkOrderForm />} />
