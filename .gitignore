@@ -1,32 +1,56 @@
-﻿node_modules/
-.env
+﻿# Node modules
+node_modules/
 frontend/node_modules/
 backend/node_modules/
-frontend/build/
-backend/uploads/
-backend/data/
-frontend/.env.local
 
-# Build artifacts
+# Env & secrets (keep samples)
+**/.env
+**/.env.local
+**/.env.*.local
+!.env.sample
+!frontend/.env.sample
+!backend/.env.sample
+
+# Build / cache / temp
 dist/
 build/
 .cache/
+tmp/
 *.tmp
-*.log
 
-# Backup artifacts  
-backups/
-*.zip
-*.7z
-*.tar
-*.bundle
+# Logs & pids anywhere
+**/*.log
+**/*.pid
+nohup.out
+**/server.log
+**/server-debug.log
+**/.frontend.log
+**/.server.log
+**/.server.pid
 
-# System files
+# Generated data & uploads
+backend/uploads/
+backend/data/
+backend/server/data/
+data/
+
+# Backups & archives (anywhere)
+**/backups/
+**/.backups/
+**/*.zip
+**/*.tar
+**/*.tar.gz
+**/*.gz
+**/*.bundle
+**/*.7z
+
+# OS/IDE
 .DS_Store
 Thumbs.db
-
-# IDE files
 .vscode/settings.json
 .idea/
 
-backups/
+# Test outputs
+coverage/
+playwright-report/
+test-results/
