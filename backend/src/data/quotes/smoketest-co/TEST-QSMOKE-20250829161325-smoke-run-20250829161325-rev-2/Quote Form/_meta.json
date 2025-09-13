@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "quoteNo": "TEST-QSMOKE-20250829161325",
+  "customerName": "SmokeTest Co",
+  "savedAt": "2025-08-29T16:13:26.237Z",
+  "form": {
+    "appState": {
+      "meta": {
+        "quoteNo": "TEST-QSMOKE-20250829161325",
+        "date": "2025-08-29",
+        "customerName": "SmokeTest Co",
+        "description": "Smoke run 20250829161325"
+      },
+      "rows": [
+        {
+          "itemNo": "1",
+          "material": "TestMat",
+          "qty": 2
+        }
+      ],
+      "nde": []
+    }
+  }
+}
