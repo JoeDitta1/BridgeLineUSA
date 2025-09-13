@@ -6,6 +6,8 @@ const Backups = () => {
   const [logs, setLogs] = useState([]);
   const [result, setResult] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
+  const [pushResult, setPushResult] = useState(null);
 
   const runBackup = async () => {
     if (isRunning) return;
@@ -83,6 +85,44 @@ const Backups = () => {
     setResult(null);
   };
 
+  const pushToGitHub = async () => {
+    if (isPushing) return;
+    
+    setIsPushing(true);
+    setPushResult(null);
+    
+    try {
+      const response = await fetch('/api/backups/push-github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setPushResult({
+          success: true,
+          message: data.message,
+          branch: data.branch,
+          commits: data.commits
+        });
+      } else {
+        setPushResult({
+          success: false,
+          message: data.error || 'Failed to push to GitHub'
+        });
+      }
+    } catch (error) {
+      console.error('GitHub push error:', error);
+      setPushResult({
+        success: false,
+        message: error.message
+      });
+    } finally {
+      setIsPushing(false);
+    }
+  };
+
   const downloadFile = (url, filename) => {
     const link = document.createElement('a');
     link.href = url;
@@ -139,6 +179,23 @@ const Backups = () => {
             {isRunning ? 'Creating Backup...' : 'Create Backup'}
           </button>
           
+          <button 
+            onClick={pushToGitHub}
+            disabled={isPushing || isRunning}
+            style={{ 
+              padding: "10px 20px", 
+              background: isPushing ? "#ccc" : "#4caf50", 
+              color: "white", 
+              border: "none", 
+              borderRadius: 6,
+              cursor: (isPushing || isRunning) ? "not-allowed" : "pointer",
+              opacity: (isPushing || isRunning) ? 0.6 : 1,
+              fontWeight: 500
+            }}
+          >
+            {isPushing ? 'Pushing...' : 'Push to GitHub'}
+          </button>
+          
           {isRunning && (
             <div style={{ display: "flex", alignItems: "center", color: "#666" }}>
               <div style={{ 
@@ -154,7 +211,57 @@ const Backups = () => {
               Backup in progress...
             </div>
           )}
+          
+          {isPushing && (
+            <div style={{ display: "flex", alignItems: "center", color: "#666" }}>
+              <div style={{ 
+                display: "inline-block",
+                width: 16, 
+                height: 16, 
+                border: "2px solid #f3f3f3",
+                borderTop: "2px solid #4caf50",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+                marginRight: 8
+              }}></div>
+              Pushing to GitHub...
+            </div>
+          )}
         </div>
+
+        {/* GitHub Push Result */}
+        {pushResult && (
+          <div style={{ 
+            marginBottom: 16,
+            padding: 12,
+            borderRadius: 6,
+            background: pushResult.success ? "#e8f5e8" : "#fee",
+            border: `1px solid ${pushResult.success ? "#4caf50" : "#f44336"}`
+          }}>
+            <div style={{ 
+              fontWeight: 600, 
+              color: pushResult.success ? "#2e7d32" : "#d32f2f",
+              marginBottom: 4
+            }}>
+              {pushResult.success ? '✅ GitHub Push Successful!' : '❌ GitHub Push Failed'}
+            </div>
+            <div style={{ 
+              fontSize: 14, 
+              color: pushResult.success ? "#2e7d32" : "#d32f2f"
+            }}>
+              {pushResult.message}
+            </div>
+            {pushResult.success && pushResult.commits && (
+              <div style={{ 
+                fontSize: 12, 
+                color: "#666", 
+                marginTop: 4
+              }}>
+                Branch: {pushResult.branch} • Commits pushed: {pushResult.commits}
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ fontSize: 14, color: "#666" }}>
           <h3 style={{ fontWeight: 600, marginBottom: 8 }}>What gets backed up:</h3>
@@ -165,6 +272,12 @@ const Backups = () => {
             <li>User uploads and assets</li>
             <li>Complete Git history (in bundle format)</li>
           </ul>
+          
+          <h3 style={{ fontWeight: 600, marginBottom: 8, marginTop: 16 }}>Push to GitHub:</h3>
+          <p style={{ margin: 0, fontSize: 14, color: "#666" }}>
+            The "Push to GitHub" button syncs your current working branch ({window.location.hostname === 'localhost' ? 'dev' : 'main'}) 
+            with GitHub. Use this to save your latest changes to the remote repository.
+          </p>
         </div>
       </div>
 

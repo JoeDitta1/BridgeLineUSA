@@ -77,6 +77,98 @@ function sendSSE(res, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
+// POST /api/backups/push-github - Push current branch to GitHub
+router.post('/push-github', async (req, res) => {
+  try {
+    // Get current branch
+    const getBranch = spawn('git', ['branch', '--show-current'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: '/workspaces/BridgeLineUSA'
+    });
+    
+    let currentBranch = '';
+    getBranch.stdout.on('data', (data) => {
+      currentBranch = data.toString().trim();
+    });
+    
+    getBranch.on('close', async (code) => {
+      if (code !== 0) {
+        return res.status(500).json({ ok: false, error: 'Failed to get current branch' });
+      }
+      
+      // Check if there are any commits to push
+      const checkAhead = spawn('git', ['rev-list', '--count', `origin/${currentBranch}..HEAD`], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: '/workspaces/BridgeLineUSA'
+      });
+      
+      let commitsAhead = '';
+      checkAhead.stdout.on('data', (data) => {
+        commitsAhead = data.toString().trim();
+      });
+      
+      checkAhead.on('close', async (pushCode) => {
+        const commitsCount = parseInt(commitsAhead) || 0;
+        
+        if (commitsCount === 0) {
+          return res.json({ 
+            ok: true, 
+            message: `Branch '${currentBranch}' is already up to date with GitHub`,
+            branch: currentBranch,
+            commits: 0
+          });
+        }
+        
+        // Push to GitHub
+        const pushProcess = spawn('git', ['push', 'origin', currentBranch], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          cwd: '/workspaces/BridgeLineUSA'
+        });
+        
+        let pushOutput = '';
+        let pushError = '';
+        
+        pushProcess.stdout.on('data', (data) => {
+          pushOutput += data.toString();
+        });
+        
+        pushProcess.stderr.on('data', (data) => {
+          pushError += data.toString();
+        });
+        
+        pushProcess.on('close', (pushExitCode) => {
+          if (pushExitCode === 0) {
+            res.json({ 
+              ok: true, 
+              message: `Successfully pushed ${commitsCount} commit(s) to GitHub`,
+              branch: currentBranch,
+              commits: commitsCount
+            });
+          } else {
+            console.error('Git push error:', pushError);
+            res.status(500).json({ 
+              ok: false, 
+              error: `Failed to push to GitHub: ${pushError || 'Unknown error'}`
+            });
+          }
+        });
+        
+        pushProcess.on('error', (err) => {
+          console.error('Git push spawn error:', err);
+          res.status(500).json({ 
+            ok: false, 
+            error: `Failed to start git push: ${err.message}`
+          });
+        });
+      });
+    });
+    
+  } catch (error) {
+    console.error('[push-github] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // POST /api/backups/run - Start a backup job
 router.post('/run', (req, res) => {
   try {
