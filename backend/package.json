@@ -1,0 +1,29 @@
+{
+  "name": "scm-ai-server",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "SCM AI minimal API: materials, normalization, parts, price history",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
+    "start:clean": "./start-server.sh",
+    "stop": "pkill -f 'node.*src/index.js' || lsof -ti:4000 | xargs kill -9 2>/dev/null || true",
+    "restart": "npm run stop && sleep 2 && npm start",
+    "serve:prod": "set SERVE_FRONTEND=true&& node src/index.js",
+    "initdb": "node src/index.js --initdb",
+    "import:pipe": "node scripts/import-pipe-csv.js",
+    "materials:dry": "node scripts/materials-enrich.mjs --dry",
+    "materials:apply": "node scripts/materials-enrich.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.2",
+    "better-sqlite3": "^9.4.0",
+    "cors": "^2.8.5",
+    "csv-parse": "^5.5.6",
+    "dotenv": "^17.2.1",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "pdfjs-dist": "^5.4.149",
+    "uuid": "^11.1.0"
+  }
+}
