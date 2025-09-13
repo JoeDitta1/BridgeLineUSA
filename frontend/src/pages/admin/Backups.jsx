@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Button from '../../components/ui/Button';
+import { Link } from 'react-router-dom';
 
 const Backups = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -93,76 +93,132 @@ const Backups = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">System Backup</h1>
-        
-        <div className="bg-white rounded-lg shadow-sm border p-6">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Create Backup</h2>
-            <p className="text-gray-600 mb-4">
-              Create a complete backup of the system including code, data, and user uploads. 
-              The backup will create a new Git branch and generate both a Git bundle and ZIP archive.
-            </p>
-            <p className="text-sm text-blue-600 mb-4">
-              ✅ <strong>Safe Operation:</strong> Your working branch will be preserved and unchanged.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <Button 
-              onClick={runBackup}
-              disabled={isRunning}
-              className={`px-6 py-2 rounded-lg font-medium ${
-                isRunning 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
-            >
-              {isRunning ? 'Creating Backup...' : 'Create Backup'}
-            </Button>
-            
-            {isRunning && (
-              <div className="flex items-center text-gray-600">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                Backup in progress...
-              </div>
-            )}
-          </div>
-
-          <div className="mt-6 text-sm text-gray-500">
-            <h3 className="font-medium mb-2">What gets backed up:</h3>
-            <ul className="list-disc list-inside space-y-1">
-              <li>All source code and configuration files</li>
-              <li>SQLite databases and user data</li>
-              <li>Quote files and customer data</li>
-              <li>User uploads and assets</li>
-              <li>Complete Git history (in bundle format)</li>
-            </ul>
-          </div>
+    <>
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+      <div style={{ padding: 20, maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ marginBottom: 12 }}>
+          <Link to="/admin">← Back to Admin</Link>
         </div>
+        <h1>System Backup</h1>
+        <p style={{ color: "#666", marginBottom: 20 }}>Create a complete backup of the system including code, data, and user uploads.</p>
+        
+      <div style={{ background: "#f9fafb", padding: 20, borderRadius: 8 }}>
+        <div style={{ marginBottom: 16 }}>
+          <h2 style={{ marginTop: 0, marginBottom: 8 }}>Create Backup</h2>
+          <p style={{ color: "#666", marginBottom: 12 }}>
+            Create a complete backup of the system including code, data, and user uploads. 
+            The backup will create a new Git branch and generate both a Git bundle and ZIP archive.
+          </p>
+          <p style={{ fontSize: 14, color: "#1976d2", marginBottom: 16 }}>
+            ✅ <strong>Safe Operation:</strong> Your working branch will be preserved and unchanged.
+          </p>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
+          <button 
+            onClick={runBackup}
+            disabled={isRunning}
+            style={{ 
+              padding: "10px 20px", 
+              background: isRunning ? "#ccc" : "#1976d2", 
+              color: "white", 
+              border: "none", 
+              borderRadius: 6,
+              cursor: isRunning ? "not-allowed" : "pointer",
+              opacity: isRunning ? 0.6 : 1,
+              fontWeight: 500
+            }}
+          >
+            {isRunning ? 'Creating Backup...' : 'Create Backup'}
+          </button>
+          
+          {isRunning && (
+            <div style={{ display: "flex", alignItems: "center", color: "#666" }}>
+              <div style={{ 
+                display: "inline-block",
+                width: 16, 
+                height: 16, 
+                border: "2px solid #f3f3f3",
+                borderTop: "2px solid #1976d2",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+                marginRight: 8
+              }}></div>
+              Backup in progress...
+            </div>
+          )}
+        </div>
+
+        <div style={{ fontSize: 14, color: "#666" }}>
+          <h3 style={{ fontWeight: 600, marginBottom: 8 }}>What gets backed up:</h3>
+          <ul style={{ paddingLeft: 20, marginTop: 0 }}>
+            <li>All source code and configuration files</li>
+            <li>SQLite databases and user data</li>
+            <li>Quote files and customer data</li>
+            <li>User uploads and assets</li>
+            <li>Complete Git history (in bundle format)</li>
+          </ul>
+        </div>
+      </div>
 
         {/* Progress Modal */}
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
-              <div className="p-6 border-b">
-                <h3 className="text-lg font-semibold">Backup Progress</h3>
+          <div style={{ 
+            position: "fixed", 
+            top: 0, 
+            left: 0, 
+            right: 0, 
+            bottom: 0, 
+            backgroundColor: "rgba(0, 0, 0, 0.5)", 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "center", 
+            zIndex: 50 
+          }}>
+            <div style={{ 
+              background: "white", 
+              borderRadius: 8, 
+              maxWidth: "700px", 
+              width: "100%", 
+              margin: "0 16px", 
+              maxHeight: "80vh", 
+              display: "flex", 
+              flexDirection: "column" 
+            }}>
+              <div style={{ padding: "20px", borderBottom: "1px solid #e0e0e0" }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Backup Progress</h3>
               </div>
               
-              <div className="flex-1 overflow-auto p-6">
-                <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm max-h-96 overflow-auto">
+              <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+                <div style={{ 
+                  background: "#1a1a1a", 
+                  color: "#e0e0e0", 
+                  padding: 16, 
+                  borderRadius: 6, 
+                  fontFamily: "monospace", 
+                  fontSize: 13, 
+                  maxHeight: "400px", 
+                  overflow: "auto" 
+                }}>
                   {logs.length === 0 ? (
-                    <div className="text-gray-400">Starting backup...</div>
+                    <div style={{ color: "#999" }}>Starting backup...</div>
                   ) : (
                     logs.map((log, index) => (
-                      <div key={index} className={`mb-1 ${
-                        log.status === 'error' ? 'text-red-400' :
-                        log.status === 'warning' ? 'text-yellow-400' :
-                        log.status === 'done' ? 'text-green-400' :
-                        'text-gray-100'
-                      }`}>
-                        <span className="text-gray-500 text-xs">
+                      <div key={index} style={{ 
+                        marginBottom: 4,
+                        color: log.status === 'error' ? '#ff6b6b' :
+                               log.status === 'warning' ? '#ffd93d' :
+                               log.status === 'done' ? '#51cf66' :
+                               '#e0e0e0'
+                      }}>
+                        <span style={{ color: "#999", fontSize: 11 }}>
                           {new Date(log.timestamp).toLocaleTimeString()}
                         </span>{' '}
                         {log.message}
@@ -172,34 +228,61 @@ const Backups = () => {
                 </div>
 
                 {result && (
-                  <div className={`mt-4 p-4 rounded-lg ${
-                    result.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-                  }`}>
-                    <div className={`font-medium ${result.success ? 'text-green-800' : 'text-red-800'}`}>
+                  <div style={{ 
+                    marginTop: 16, 
+                    padding: 16, 
+                    borderRadius: 6,
+                    background: result.success ? "#e8f5e9" : "#ffebee",
+                    border: result.success ? "1px solid #c8e6c9" : "1px solid #ffcdd2"
+                  }}>
+                    <div style={{ 
+                      fontWeight: 600,
+                      color: result.success ? "#2e7d32" : "#c62828"
+                    }}>
                       {result.success ? '✅ Backup Completed Successfully!' : '❌ Backup Failed'}
                     </div>
-                    <div className={`text-sm mt-1 ${result.success ? 'text-green-700' : 'text-red-700'}`}>
+                    <div style={{ 
+                      fontSize: 14, 
+                      marginTop: 4,
+                      color: result.success ? "#388e3c" : "#d32f2f"
+                    }}>
                       {result.message}
                     </div>
                     
                     {result.success && (
-                      <div className="mt-4 space-y-2">
-                        <div className="text-sm text-green-700">
+                      <div style={{ marginTop: 16 }}>
+                        <div style={{ fontSize: 14, color: "#388e3c", marginBottom: 8 }}>
                           <strong>Branch:</strong> {result.branch}
                         </div>
-                        <div className="flex gap-2">
-                          <Button
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
                             onClick={() => downloadFile(result.bundle, `BridgeLineUSA-${result.branch}.bundle`)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm rounded"
+                            style={{ 
+                              background: "#4caf50", 
+                              color: "white", 
+                              padding: "8px 16px", 
+                              fontSize: 14, 
+                              borderRadius: 4,
+                              border: "none",
+                              cursor: "pointer"
+                            }}
                           >
                             Download Bundle
-                          </Button>
-                          <Button
+                          </button>
+                          <button
                             onClick={() => downloadFile(result.zip, `BridgeLineUSA-${result.branch}.zip`)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm rounded"
+                            style={{ 
+                              background: "#1976d2", 
+                              color: "white", 
+                              padding: "8px 16px", 
+                              fontSize: 14, 
+                              borderRadius: 4,
+                              border: "none",
+                              cursor: "pointer"
+                            }}
                           >
                             Download ZIP
-                          </Button>
+                          </button>
                         </div>
                       </div>
                     )}
@@ -207,24 +290,28 @@ const Backups = () => {
                 )}
               </div>
               
-              <div className="p-6 border-t flex justify-end">
-                <Button
+              <div style={{ padding: 20, borderTop: "1px solid #e0e0e0", display: "flex", justifyContent: "flex-end" }}>
+                <button
                   onClick={closeModal}
                   disabled={isRunning}
-                  className={`px-4 py-2 rounded ${
-                    isRunning 
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                      : 'bg-gray-600 hover:bg-gray-700 text-white'
-                  }`}
+                  style={{ 
+                    padding: "10px 16px", 
+                    background: isRunning ? "#ccc" : "#666", 
+                    color: "white", 
+                    border: "none", 
+                    borderRadius: 4,
+                    cursor: isRunning ? "not-allowed" : "pointer",
+                    opacity: isRunning ? 0.6 : 1
+                  }}
                 >
                   {isRunning ? 'Please Wait...' : 'Close'}
-                </Button>
+                </button>
               </div>
             </div>
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 };
 
