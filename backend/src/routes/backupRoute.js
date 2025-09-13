@@ -6,8 +6,9 @@ import path from 'path';
 
 const router = express.Router();
 
-// In-memory job registry
+// In-memory job registry and SSE connections
 const jobs = new Map(); // jobId -> { process, logs, status, startTime, metadata }
+const sseConnections = new Map(); // jobId -> Set of response objects
 const MAX_LOG_LINES = 500; // Keep last 500 lines per job
 const JOB_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
 
@@ -139,6 +140,12 @@ router.get('/stream', (req, res) => {
   
   const job = jobs.get(jobId);
   
+  // Track this SSE connection
+  if (!sseConnections.has(jobId)) {
+    sseConnections.set(jobId, new Set());
+  }
+  sseConnections.get(jobId).add(res);
+  
   // Send existing logs
   job.logs.forEach(log => sendSSE(res, log));
   
@@ -148,18 +155,38 @@ router.get('/stream', (req, res) => {
     return;
   }
   
-  // Keep connection alive and monitor job
-  const interval = setInterval(() => {
+  // Keep connection alive with heartbeat
+  const heartbeatInterval = setInterval(() => {
+    if (res.writableEnded) {
+      clearInterval(heartbeatInterval);
+      return;
+    }
+    // Send heartbeat comment (invisible to client but keeps connection alive)
+    res.write(': heartbeat\n\n');
+  }, 15000); // Send heartbeat every 15 seconds
+  
+  // Monitor job completion
+  const checkInterval = setInterval(() => {
     const currentJob = jobs.get(jobId);
     if (!currentJob || currentJob.status === 'done' || currentJob.status === 'error') {
-      clearInterval(interval);
+      clearInterval(checkInterval);
+      clearInterval(heartbeatInterval);
       res.end();
     }
   }, 1000);
   
   // Clean up on client disconnect
   req.on('close', () => {
-    clearInterval(interval);
+    clearInterval(checkInterval);
+    clearInterval(heartbeatInterval);
+    // Remove from tracked connections
+    const connections = sseConnections.get(jobId);
+    if (connections) {
+      connections.delete(res);
+      if (connections.size === 0) {
+        sseConnections.delete(jobId);
+      }
+    }
   });
 });
 
@@ -310,7 +337,7 @@ echo "✅ Backup complete! Original branch ($ORIG_BRANCH) preserved."
   });
 }
 
-// Add log entry to job
+// Add log entry to job and broadcast to SSE streams
 function addLog(jobId, logEntry) {
   const job = jobs.get(jobId);
   if (!job) return;
@@ -325,6 +352,16 @@ function addLog(jobId, logEntry) {
   // Keep only recent logs
   if (job.logs.length > MAX_LOG_LINES) {
     job.logs = job.logs.slice(-MAX_LOG_LINES);
+  }
+  
+  // Broadcast new log to all active SSE connections for this job
+  const connections = sseConnections.get(jobId);
+  if (connections && connections.size > 0) {
+    connections.forEach(res => {
+      if (!res.writableEnded) {
+        sendSSE(res, logWithTimestamp);
+      }
+    });
   }
 }
 
