@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BridgeLineUSA - Customer Quote Folders</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-navy: #1e3a5f;
+            --primary-teal: #00a884;
+            --light-gray: #f5f7fa;
+            --medium-gray: #e2e8f0;
+            --dark-gray: #64748b;
+            --white: #ffffff;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --quotes-blue: #3b82f6;
+            --folder-yellow: #fbbf24;
+            --revision-purple: #8b5cf6;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, var(--light-gray) 0%, #ffffff 100%);
+            min-height: 100vh;
+            color: var(--primary-navy);
+        }
+
+        /* Header */
+        .header {
+            background: var(--white);
+            border-bottom: 2px solid var(--medium-gray);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-navy);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .logo::before {
+            content: 'BL';
+            color: var(--white);
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .logo::after {
+            content: '✓';
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            background: var(--primary-teal);
+            color: var(--white);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            border: 2px solid var(--white);
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--dark-gray);
+            font-size: 0.875rem;
+        }
+
+        .breadcrumb a {
+            color: var(--primary-teal);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .breadcrumb .customer-name {
+            font-weight: 600;
+            color: var(--primary-navy);
+        }
+
+        .nav-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .back-btn {
+            background: var(--medium-gray);
+            color: var(--primary-navy);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .back-btn:hover {
+            background: var(--dark-gray);
+            color: var(--white);
+        }
+
+        /* Main Content */
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            color: var(--primary-navy);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .customer-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--quotes-blue), #1d4ed8);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: var(--white);
+        }
+
+        .page-subtitle {
+            color: var(--dark-gray);
+            font-size: 1.125rem;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            background: var(--quotes-blue);
+            color: var(--white);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .action-btn:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+        }
+
+        .action-btn.secondary {
+            background: var(--medium-gray);
+            color: var(--primary-navy);
+        }
+
+        .action-btn.secondary:hover {
+            background: var(--dark-gray);
+            color: var(--white);
+        }
+
+        .customer-stats {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary-navy);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--dark-gray);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Quote Folders Grid */
+        .quote-folders {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .quote-folder-card {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 2px solid transparent;
+            position: relative;
+        }
+
+        .quote-folder-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border-color: var(--quotes-blue);
+        }
+
+        .quote-folder-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .quote-folder-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--folder-yellow), #f59e0b);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: var(--white);
+            flex-shrink: 0;
+        }
+
+        .quote-folder-info {
+            flex: 1;
+        }
+
+        .quote-number {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--quotes-blue);
+            margin-bottom: 0.25rem;
+        }
+
+        .quote-description {
+            font-size: 0.875rem;
+            color: var(--primary-navy);
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .quote-date {
+            font-size: 0.75rem;
+            color: var(--dark-gray);
+        }
+
+        .revision-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: var(--revision-purple);
+            color: var(--white);
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .quote-subfolders {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .subfolder-chip {
+            background: var(--light-gray);
+            color: var(--dark-gray);
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .quote-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1rem;
+            border-top: 1px solid var(--medium-gray);
+        }
+
+        .quote-status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-active { background: #dcfce7; color: #166534; }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-completed { background: #dbeafe; color: #1e40af; }
+        .status-revision { background: #ede9fe; color: #6b21a8; }
+
+        .quote-value {
+            font-weight: 600;
+            color: var(--primary-navy);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--dark-gray);
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--primary-navy);
+        }
+
+        .empty-subtitle {
+            margin-bottom: 2rem;
+        }
+
+        .create-quote-btn {
+            background: var(--success);
+            color: var(--white);
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .create-quote-btn:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        /* Loading State */
+        .loading-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--dark-gray);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--light-gray);
+            border-top: 4px solid var(--quotes-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .main-content {
+                padding: 1rem;
+            }
+
+            .quick-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .customer-stats {
+                justify-content: center;
+            }
+
+            .quote-folders {
+                grid-template-columns: 1fr;
+            }
+
+            .page-title {
+                font-size: 1.5rem;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo-section">
+            <div class="logo"></div>
+            <div class="breadcrumb">
+                <a href="../dashboard.html">Dashboard</a>
+                <span>></span>
+                <a href="quotes-main.html">Quotes</a>
+                <span>></span>
+                <a href="customer-quotes.html">Customer Quotes</a>
+                <span>></span>
+                <span class="customer-name" id="customerName">ABC Manufacturing</span>
+            </div>
+        </div>
+        <div class="nav-section">
+            <a href="customer-quotes.html" class="back-btn">
+                ← Back to Customers
+            </a>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="page-header">
+            <h1 class="page-title">
+                <div class="customer-icon">🏢</div>
+                <span id="customerDisplayName">ABC Manufacturing</span>
+            </h1>
+            <p class="page-subtitle">Quote folders and project documentation</p>
+        </div>
+
+        <div class="quick-actions">
+            <div class="action-buttons">
+                <button class="action-btn" onclick="createNewQuote()">
+                    ➕ New Quote
+                </button>
+                <button class="action-btn secondary" onclick="viewQuoteLog()">
+                    📋 Quote Log
+                </button>
+                <button class="action-btn secondary" onclick="exportCustomerData()">
+                    📊 Export Data
+                </button>
+            </div>
+            <div class="customer-stats">
+                <div class="stat">
+                    <div class="stat-number" id="totalQuotes">8</div>
+                    <div class="stat-label">Total Quotes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number" id="totalValue">$245K</div>
+                    <div class="stat-label">Total Value</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number" id="activeQuotes">3</div>
+                    <div class="stat-label">Active</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-state">
+            <div class="loading-spinner"></div>
+            <h3>Scanning quote folders...</h3>
+            <p>Checking file system for existing quote folders</p>
+        </div>
+
+        <!-- Quote Folders Grid -->
+        <div id="quoteFolders" class="quote-folders" style="display: none;">
+            <!-- Quote folders will be dynamically populated here -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <div class="empty-icon">📁</div>
+            <h2 class="empty-title">No quote folders yet</h2>
+            <p class="empty-subtitle">Quote folders will be automatically created when you save new quotes for this customer</p>
+            <button class="create-quote-btn" onclick="createNewQuote()">
+                Create First Quote
+            </button>
+        </div>
+    </main>
+
+    <script>
+        // Sample quote folder data - in real implementation, this would scan the file system
+        const sampleQuoteFolders = [
+            {
+                quoteNumber: "SCM-Q2025-0143",
+                revision: 2,
+                description: "Steel Fabrication",
+                dateCreated: "2025-01-15",
+                status: "active",
+                value: 45230,
+                subfolders: ["Quote Form", "Vendor Quotes", "Drawings", "Customer Info"],
+                hasFiles: true
+            },
+            {
+                quoteNumber: "SCM-Q2025-0138",
+                revision: 1,
+                description: "Pump Assembly",
+                dateCreated: "2025-01-10",
+                status: "completed",
+                value: 28750,
+                subfolders: ["Quote Form", "Vendor Quotes", "Drawings", "Customer Info"],
+                hasFiles: true
+            },
+            {
+                quoteNumber: "SCM-Q2025-0135",
+                revision: 3,
+                description: "Tank Project",
+                dateCreated: "2025-01-08",
+                status: "revision",
+                value: 67890,
+                subfolders: ["Quote Form", "Vendor Quotes", "Drawings", "Customer Info"],
+                hasFiles: true
+            },
+            {
+                quoteNumber: "SCM-Q2025-0132",
+                revision: 1,
+                description: "Conveyor System",
+                dateCreated: "2025-01-05",
+                status: "pending",
+                value: 156420,
+                subfolders: ["Quote Form", "Vendor Quotes", "Drawings", "Customer Info"],
+                hasFiles: false
+            }
+        ];
+
+        let currentCustomer = "ABC Manufacturing";
+
+        function getCustomerFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('customer') || 'ABC Manufacturing';
+        }
+
+        function initializePage() {
+            currentCustomer = getCustomerFromURL();
+            document.getElementById('customerName').textContent = currentCustomer;
+            document.getElementById('customerDisplayName').textContent = currentCustomer;
+            
+            // Simulate file system scanning
+            scanQuoteFolders();
+        }
+
+        function scanQuoteFolders() {
+            // Show loading state
+            document.getElementById('loadingState').style.display = 'block';
+            document.getElementById('quoteFolders').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'none';
+
+            // Simulate scanning file system for quote folders
+            setTimeout(() => {
+                // In real implementation, this would call your backend to scan:
+                // GET /api/customers/${customerName}/quote-folders
+                
+                const quoteFolders = sampleQuoteFolders; // Replace with actual file system scan
+                
+                document.getElementById('loadingState').style.display = 'none';
+                
+                if (quoteFolders.length === 0) {
+                    document.getElementById('emptyState').style.display = 'block';
+                } else {
+                    renderQuoteFolders(quoteFolders);
+                    updateCustomerStats(quoteFolders);
+                }
+            }, 1500); // Simulate scanning time
+        }
+
+        function renderQuoteFolders(folders) {
+            const container = document.getElementById('quoteFolders');
+            container.style.display = 'grid';
+            
+            container.innerHTML = folders.map(folder => `
+                <div class="quote-folder-card" onclick="openQuoteFolder('${folder.quoteNumber}', ${folder.revision})">
+                    ${folder.revision > 1 ? `<div class="revision-badge">Rev ${folder.revision}</div>` : ''}
+                    <div class="quote-folder-header">
+                        <div class="quote-folder-icon">📁</div>
+                        <div class="quote-folder-info">
+                            <div class="quote-number">${folder.quoteNumber}</div>
+                            <div class="quote-description">${folder.description}</div>
+                            <div class="quote-date">Created: ${formatDate(folder.dateCreated)}</div>
+                        </div>
+                    </div>
+                    <div class="quote-subfolders">
+                        ${folder.subfolders.map(subfolder => `
+                            <div class="subfolder-chip">
+                                📄 ${subfolder}
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="quote-actions">
+                        <div class="quote-status status-${folder.status}">${folder.status}</div>
+                        <div class="quote-value">$${folder.value.toLocaleString()}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateCustomerStats(folders) {
+            const totalQuotes = folders.length;
+            const totalValue = folders.reduce((sum, folder) => sum + folder.value, 0);
+            const activeQuotes = folders.filter(folder => folder.status === 'active').length;
+            
+            document.getElementById('totalQuotes').textContent = totalQuotes;
+            document.getElementById('totalValue').textContent = `$${Math.round(totalValue / 1000)}K`;
+            document.getElementById('activeQuotes').textContent = activeQuotes;
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function openQuoteFolder(quoteNumber, revision) {
+            const folderName = `${quoteNumber} Rev ${revision}`;
+            console.log(`Opening quote folder: ${folderName}`);
+            
+            alert(`Opening Quote Folder: ${folderName}\n\nThis will show:\n• Quote Form (PDF/data)\n• Vendor Quotes/ (subfolder)\n• Drawings/ (subfolder)\n• Customer Info/ (subfolder)\n\nFolder path: /Quotes/${currentCustomer}/${folderName}/`);
+            
+            // In real implementation:
+            // window.location.href = `quote-folder-detail.html?customer=${encodeURIComponent(currentCustomer)}&quote=${quoteNumber}&rev=${revision}`;
+        }
+
+        function createNewQuote() {
+            // Navigate to new quote form with customer pre-filled
+            console.log(`Creating new quote for: ${currentCustomer}`);
+            alert(`Creating new quote for ${currentCustomer}\n\nThis will:\n1. Open New Quote Form\n2. Pre-fill customer name\n3. Auto-detect if this is a new quote or revision\n4. Create folder structure on save`);
+            
+            // In real implementation:
+            // window.location.href = `../pages/QuoteForm.jsx?customer=${encodeURIComponent(currentCustomer)}`;
+        }
+
+        function viewQuoteLog() {
+            // Open quote log filtered for this customer
+            window.location.href = '../pages/QuoteLog.jsx';
+        }
+
+        function exportCustomerData() {
+            alert(`Export Options for ${currentCustomer}:\n• All quote data (CSV)\n• Quote summaries (PDF)\n• File vault contents\n• Custom date ranges`);
+        }
+
+        // Initialize page when DOM loads
+        document.addEventListener('DOMContentLoaded', initializePage);
+    </script>
+</body>
+</html>
