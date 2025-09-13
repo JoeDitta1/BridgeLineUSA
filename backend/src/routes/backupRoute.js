@@ -253,8 +253,15 @@ echo "✅ Backup complete! Original branch ($ORIG_BRANCH) preserved."
     process.on('close', (code) => {
       clearTimeout(timeout);
       
-      if (code === 0) {
-        // Success - verify we're still on the original branch
+      // Check if backup files were actually created (more reliable than exit code)
+      const bundleExists = fs.existsSync(bundlePath);
+      const zipExists = fs.existsSync(zipPath);
+      
+      if (bundleExists && zipExists) {
+        // Success - files were created successfully
+        addLog(jobId, { status: 'info', message: `Backup files created successfully (exit code: ${code})` });
+        
+        // Verify we're still on the original branch
         const verifyBranch = spawn('git', ['branch', '--show-current'], {
           stdio: ['ignore', 'pipe', 'pipe'],
           cwd: '/workspaces/BridgeLineUSA'
@@ -276,11 +283,15 @@ echo "✅ Backup complete! Original branch ($ORIG_BRANCH) preserved."
           job.status = 'done';
         });
       } else {
-        // Error
+        // Error - backup files not created
+        const missingFiles = [];
+        if (!bundleExists) missingFiles.push('bundle');
+        if (!zipExists) missingFiles.push('zip');
+        
         addLog(jobId, { 
           status: 'error', 
-          step: 'backup-script', 
-          message: `Backup script failed with exit code ${code}` 
+          step: 'backup-verification', 
+          message: `Backup failed - missing files: ${missingFiles.join(', ')} (exit code: ${code})` 
         });
         job.status = 'error';
       }
