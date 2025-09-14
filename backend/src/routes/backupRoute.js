@@ -96,69 +96,125 @@ router.post('/push-github', async (req, res) => {
         return res.status(500).json({ ok: false, error: 'Failed to get current branch' });
       }
       
-      // Check if there are any commits to push
-      const checkAhead = spawn('git', ['rev-list', '--count', `origin/${currentBranch}..HEAD`], {
+      // First, add all changes
+      const addProcess = spawn('git', ['add', '.'], {
         stdio: ['ignore', 'pipe', 'pipe'],
         cwd: '/workspaces/BridgeLineUSA'
       });
       
-      let commitsAhead = '';
-      checkAhead.stdout.on('data', (data) => {
-        commitsAhead = data.toString().trim();
-      });
-      
-      checkAhead.on('close', async (pushCode) => {
-        const commitsCount = parseInt(commitsAhead) || 0;
-        
-        if (commitsCount === 0) {
-          return res.json({ 
-            ok: true, 
-            message: `Branch '${currentBranch}' is already up to date with GitHub`,
-            branch: currentBranch,
-            commits: 0
-          });
+      addProcess.on('close', (addCode) => {
+        if (addCode !== 0) {
+          return res.status(500).json({ ok: false, error: 'Failed to add changes' });
         }
         
-        // Push to GitHub
-        const pushProcess = spawn('git', ['push', 'origin', currentBranch], {
+        // Check if there are any changes to commit
+        const statusProcess = spawn('git', ['status', '--porcelain'], {
           stdio: ['ignore', 'pipe', 'pipe'],
           cwd: '/workspaces/BridgeLineUSA'
         });
         
-        let pushOutput = '';
-        let pushError = '';
-        
-        pushProcess.stdout.on('data', (data) => {
-          pushOutput += data.toString();
+        let statusOutput = '';
+        statusProcess.stdout.on('data', (data) => {
+          statusOutput += data.toString();
         });
         
-        pushProcess.stderr.on('data', (data) => {
-          pushError += data.toString();
-        });
-        
-        pushProcess.on('close', (pushExitCode) => {
-          if (pushExitCode === 0) {
-            res.json({ 
-              ok: true, 
-              message: `Successfully pushed ${commitsCount} commit(s) to GitHub`,
-              branch: currentBranch,
-              commits: commitsCount
+        statusProcess.on('close', (statusCode) => {
+          if (statusCode !== 0) {
+            return res.status(500).json({ ok: false, error: 'Failed to check git status' });
+          }
+          
+          // If there are changes, commit them
+          if (statusOutput.trim()) {
+            const commitMessage = `Auto-commit: Update from web interface - ${new Date().toISOString()}`;
+            const commitProcess = spawn('git', ['commit', '-m', commitMessage], {
+              stdio: ['ignore', 'pipe', 'pipe'],
+              cwd: '/workspaces/BridgeLineUSA'
+            });
+            
+            commitProcess.on('close', (commitCode) => {
+              if (commitCode !== 0) {
+                return res.status(500).json({ ok: false, error: 'Failed to commit changes' });
+              }
+              
+              // Now push to GitHub
+              pushToGitHub();
             });
           } else {
-            console.error('Git push error:', pushError);
-            res.status(500).json({ 
-              ok: false, 
-              error: `Failed to push to GitHub: ${pushError || 'Unknown error'}`
+            // No changes to commit, just push existing commits
+            pushToGitHub();
+          }
+          
+          function pushToGitHub() {
+            // Check if there are any commits to push
+            const checkAhead = spawn('git', ['rev-list', '--count', `origin/${currentBranch}..HEAD`], {
+              stdio: ['ignore', 'pipe', 'pipe'],
+              cwd: '/workspaces/BridgeLineUSA'
+            });
+            
+            let commitsAhead = '';
+            checkAhead.stdout.on('data', (data) => {
+              commitsAhead = data.toString().trim();
+            });
+            
+            checkAhead.on('close', async (code) => {
+              if (code !== 0) {
+                return res.status(500).json({ ok: false, error: 'Failed to check commits ahead' });
+              }
+              
+              const commitsCount = parseInt(commitsAhead) || 0;
+              
+              if (commitsCount === 0) {
+                return res.json({ 
+                  ok: true, 
+                  message: `Branch '${currentBranch}' is already up to date with GitHub`,
+                  branch: currentBranch,
+                  commits: 0
+                });
+              }
+              
+              // Push to GitHub
+              const pushProcess = spawn('git', ['push', 'origin', currentBranch], {
+                stdio: ['ignore', 'pipe', 'pipe'],
+                cwd: '/workspaces/BridgeLineUSA'
+              });
+              
+              let pushOutput = '';
+              let pushError = '';
+              
+              pushProcess.stdout.on('data', (data) => {
+                pushOutput += data.toString();
+              });
+              
+              pushProcess.stderr.on('data', (data) => {
+                pushError += data.toString();
+              });
+              
+              pushProcess.on('close', (pushExitCode) => {
+                if (pushExitCode === 0) {
+                  res.json({ 
+                    ok: true, 
+                    message: `Successfully pushed ${commitsCount} commit(s) to GitHub`,
+                    branch: currentBranch,
+                    commits: commitsCount
+                  });
+                } else {
+                  console.error('Git push error:', pushError);
+                  res.status(500).json({ 
+                    ok: false, 
+                    error: `Failed to push to GitHub: ${pushError || 'Unknown error'}`
+                  });
+                }
+              });
+              
+              pushProcess.on('error', (err) => {
+                console.error('Git push spawn error:', err);
+                res.status(500).json({ 
+                  ok: false, 
+                  error: `Failed to start git push: ${err.message}`
+                });
+              });
             });
           }
-        });
-        
-        pushProcess.on('error', (err) => {
-          console.error('Git push spawn error:', err);
-          res.status(500).json({ 
-            ok: false, 
-            error: `Failed to start git push: ${err.message}`
-          });
         });
       });
     });

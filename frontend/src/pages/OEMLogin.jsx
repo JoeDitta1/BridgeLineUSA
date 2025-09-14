@@ -92,9 +92,9 @@ export default function MarketingSignInLanding() {
 
       {/* Top Nav */}
       <header className="nav">
-        <div className="logo">
-          <div className="logo-badge" aria-hidden>✔</div>
-          <div>
+        <div className="logo-section">
+          <div className="logo-circle">BL</div>
+          <div className="company-info">
             <div className="brand">BridgeLineUSA</div>
             <div className="sub">South Coast Manufacturing, LLC</div>
           </div>
@@ -163,8 +163,12 @@ export default function MarketingSignInLanding() {
       {/* Hero */}
       <section className="hero">
         <div className="hero-text">
-          <h1>AI‑driven manufacturing OS — quotes to QA, in one platform</h1>
-          <p>BridgeLineUSA unites quoting, routers, AI scheduling, inventory, time tracking, and ISO/ASME quality into a single, secure workflow. Built by South Coast Manufacturing for manufacturers, OEM partners, and shop teams.</p>
+          <h1>
+            <span className="hero-title-main">The First AI-Integrated MES</span>
+            <br />
+            <span className="hero-title-bridge">Bridging OEMs & Manufacturers</span>
+          </h1>
+          <p className="hero-subtitle">Revolutionary manufacturing platform that creates direct lines between OEMs and shop floors. From quotes to quality assurance — all powered by AI intelligence and real-time collaboration.</p>
           <div className="hero-actions">
             <a href="#request" className="btn">Request Access</a>
             <button onClick={() => setOpen(true)} className="btn-outline">Admin‑approved Sign In</button>
@@ -213,28 +217,50 @@ export default function MarketingSignInLanding() {
 
 function AvatarPanel() {
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const videoRef = useRef(null);
 
   function enableAudio() {
     setAudioEnabled(true);
-    try { videoRef.current && videoRef.current.play(); } catch {}
+    if (videoRef.current) {
+      videoRef.current.muted = false;
+      videoRef.current.play().catch(err => {
+        console.log('Video play failed:', err);
+        setVideoError(true);
+      });
+    }
+  }
+
+  function handleVideoEnded() {
+    setAudioEnabled(false); // Show play button again
+  }
+
+  function handleVideoError() {
+    setVideoError(true);
   }
 
   return (
     <div className="avatar-panel">
-      <div className="video-placeholder">
-        <div className="avatar-content">
-          <div className="avatar-icon">🤖</div>
-          <div className="avatar-title">AI Avatar Coming Soon</div>
-          <div className="avatar-subtitle">Interactive demo guide</div>
-        </div>
+      <div className="video-container">
+        <video
+          ref={videoRef}
+          className="avatar-video"
+          poster="/assets/avatar-poster.jpg"
+          muted
+          preload="auto"
+          onError={handleVideoError}
+          onEnded={handleVideoEnded}
+        >
+          <source src="/assets/avatar-intro.mp4" type="video/mp4" />
+          <source src="/assets/avatar-intro.webm" type="video/webm" />
+          Your browser does not support the video tag.
+        </video>
         {!audioEnabled && (
-          <button onClick={enableAudio} className="play" aria-label="Enable audio">▶</button>
+          <button onClick={enableAudio} className="play-button" aria-label="Play avatar introduction">
+            <div className="play-icon">▶</div>
+          </button>
         )}
       </div>
-      <p className="avatar-description">
-        Our avatar gives a 60‑second tour of quoting, routers, AI scheduling, and quality. Turn on audio to listen.
-      </p>
     </div>
   );
 }
@@ -368,18 +394,37 @@ body{margin:0}
   padding:12px 24px;
   z-index:40;
 }
-.logo{display:flex;align-items:center;gap:12px}
-.logo-badge{
-  height:36px;
-  width:36px;
-  border-radius:10px;
-  background:var(--ink);
-  color:#fff;
+.logo-section{display:flex;align-items:center;gap:1rem}
+.logo-circle{
+  width:50px;
+  height:50px;
+  background:#1e3a5f;
+  border-radius:50%;
   display:flex;
   align-items:center;
   justify-content:center;
-  font-weight:700;
+  position:relative;
+  font-weight:bold;
+  font-size:18px;
+  color:#fff;
 }
+.logo-circle::after{
+  content:'✓';
+  position:absolute;
+  bottom:-2px;
+  right:-2px;
+  background:#00a884;
+  color:#fff;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:10px;
+  border:2px solid #fff;
+}
+.company-info{display:flex;flex-direction:column}
 .brand{font-weight:600;font-size:16px}
 .sub{font-size:12px;color:#64748b}
 .links{display:flex;gap:24px}
@@ -433,16 +478,44 @@ body{margin:0}
   font-weight:700;
   margin:0 0 16px 0;
 }
-.hero p{
+.hero-title-main{
+  display:block;
+  background:linear-gradient(90deg, var(--ink), #6366f1, var(--ink));
+  background-size:200% 200%;
+  background-clip:text;
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  animation:heroGradient 3s ease-in-out infinite;
+}
+.hero-title-bridge{
+  display:block;
+  color:var(--ink);
+  font-weight:600;
+  opacity:0;
+  animation:slideInUp 0.8s ease-out 0.3s forwards;
+}
+.hero-subtitle{
   margin:0 0 24px 0;
   color:var(--slate-600);
   font-size:18px;
+  opacity:0;
+  animation:slideInUp 0.8s ease-out 0.6s forwards;
+}
+@keyframes heroGradient{
+  0%, 100%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+}
+@keyframes slideInUp{
+  from{opacity:0;transform:translateY(20px)}
+  to{opacity:1;transform:translateY(0)}
 }
 .hero-actions{
   display:flex;
   gap:12px;
   flex-wrap:wrap;
   margin-bottom:24px;
+  opacity:0;
+  animation:slideInUp 0.8s ease-out 0.9s forwards;
 }
 .features{
   display:flex;
@@ -450,16 +523,58 @@ body{margin:0}
   flex-wrap:wrap;
   color:var(--slate-600);
   font-size:14px;
+  opacity:0;
+  animation:slideInUp 0.8s ease-out 1.2s forwards;
 }
 
 /***** Avatar *****/
 .avatar-panel{position:relative}
-.video-placeholder{
+.video-container{
   position:relative;
   width:100%;
-  aspect-ratio:16/9;
-  border-radius:12px;
-  overflow:hidden;
+}
+.avatar-video{
+  width:100% !important;
+  height:100% !important;
+  object-fit:cover !important;
+  display:block !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:none !important;
+  outline:none !important;
+  background:transparent !important;
+}
+.avatar-content{text-align:center}
+.avatar-icon{font-size:48px;margin-bottom:16px}
+.avatar-title{font-size:18px;font-weight:500;margin-bottom:4px}
+.avatar-subtitle{font-size:14px;opacity:0.75}
+.play-button{
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%, -50%);
+  height:64px;
+  width:64px;
+  border-radius:50%;
+  border:none;
+  background:rgba(255,255,255,0.95);
+  backdrop-filter:blur(8px);
+  color:#1e3a5f;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  box-shadow:0 8px 32px rgba(0,0,0,0.3);
+  transition:all 0.3s ease;
+}
+.play-button:hover{
+  transform:translate(-50%, -50%) scale(1.1);
+  background:rgba(255,255,255,1);
+}
+.play-icon{
+  font-size:24px;
+  margin-left:4px;
+}
   box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);
   border:1px solid var(--slate-200);
   background:linear-gradient(135deg, #1f2937 0%, #111827 100%);
