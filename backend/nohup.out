@@ -1,0 +1,31 @@
+
+> scm-ai-server@0.2.0 start
+> node src/index.js
+
+[DB] Using database at: /workspaces/BridgeLineUSA/backend/data/app.db
+Could not ensure unique index idx_quotes_customer_date_description: UNIQUE constraint failed: quotes.customer_name, quotes.date, quotes.description
+[DB] migrate() executed; equipment table exists: true
+[Static] Disabled or build not found. (Set SERVE_FRONTEND=true after building the frontend.)
+Server is running on http://localhost:4000
+Uploads: /workspaces/BridgeLineUSA/backend/uploads
+Quote folders: /workspaces/BridgeLineUSA/backend/data/quotes
+AI BOM extraction requested for quote: SCM-Q0042
+Supabase client created/updated
+Failed to fetch files from Supabase database: {
+  code: '42703',
+  details: null,
+  hint: null,
+  message: 'column quote_files.uploaded_at does not exist'
+}
+No drawings found in Supabase, checking local filesystem...
+Found 1 drawing files in local filesystem
+Starting AI BOM extraction for quote SCM-Q0042 with PDF text analysis
+Processing drawing: 1624_5459_00_REV02__2025-09-08T14-57-29-023Z.pdf
+Extracting PDF text from: /workspaces/BridgeLineUSA/backend/data/quotes/Phone/SCM-Q0042/drawings/1624_5459_00_REV02__2025-09-08T14-57-29-023Z.pdf
+Successfully extracted 2842 characters from PDF: 1624_5459_00_REV02__2025-09-08T14-57-29-023Z.pdf
+Extracted 2842 characters from 1624_5459_00_REV02__2025-09-08T14-57-29-023Z.pdf
+PDF content preview: SECTION B-B DETAIL A T T T Th h h hi i iis s s s d d d do o o oc c c cu u u um m m me e e en n n nt t t t i i iis s s s o o o ou u u ur r r r p p p pr r r ro o o op p p pe e e er r r rt t t ty y y y a...
+API call failed for 1624_5459_00_REV02__2025-09-08T14-57-29-023Z.pdf: OpenAI API timeout
+No items extracted from PDF analysis, returning empty result
+SIGTERM received, shutting down gracefully
+Server closed

@@ -1,0 +1,3 @@
+This is a test file to verify the upload system is working correctly.
+Testing Supabase integration with fallback to local filesystem.
+File created at: 2024-12-16

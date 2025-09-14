@@ -1,0 +1,85 @@
+{
+  "ok": true,
+  "quoteNo": "SCM-Q0022",
+  "customerName": "Rey Jr",
+  "savedAt": "2025-08-29T14:18:26.538Z",
+  "form": {
+    "appState": {
+      "meta": {
+        "quoteNo": "",
+        "date": "2025-08-29",
+        "customerName": "Rey Jr",
+        "estimatedBy": "Joe",
+        "requestor": "Joe",
+        "partNumber": "1624 5047 72",
+        "revision": "",
+        "description": "Standard Pipe",
+        "quality": "ISO 9001",
+        "requireSA": false,
+        "domesticOnly": false,
+        "originRestriction": "",
+        "receivingLaborHours": "",
+        "receivingRate": "75",
+        "notes": "Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.",
+        "paymentTerms": "",
+        "commissionPct": "",
+        "breakInFee": "",
+        "freightMethod": "",
+        "freightAmount": "",
+        "salesTaxPct": ""
+      },
+      "rows": [
+        {
+          "itemNo": "",
+          "material": {
+            "label": "Pipe - NPS 6 STD",
+            "value": "Pipe|NPS 6 STD",
+            "familyKey": "Pipe",
+            "keywords": [
+              "pipe",
+              "nps 6 std"
+            ],
+            "type": "Pipe",
+            "family": "Pipe",
+            "size": "NPS 6 STD",
+            "unit_type": "Per Foot",
+            "od_in": 6.625,
+            "schedule": "STD",
+            "wall_in": 0.28,
+            "weight_per_ft": 18.97,
+            "price_per_lb": 0,
+            "source": "ASME B36.10 reference table"
+          },
+          "unitType": "Per Foot",
+          "grade": "A53 Gr B",
+          "lengthFt": "3",
+          "qty": "1",
+          "lengthIn": "",
+          "widthIn": "",
+          "heightIn": "",
+          "pricePerFt": "",
+          "pricePerLb": ".65",
+          "priceEach": "",
+          "totalWeight": "56.91",
+          "materialCost": "36.99",
+          "_costEach": "36.99",
+          "_outCost": 0,
+          "_procCost": 37.5,
+          "processes": [
+            {
+              "name": "Saw Cutting",
+              "hours": ".5",
+              "rate": "75",
+              "cost": "37.50"
+            }
+          ],
+          "outsourcing": [],
+          "padConventional": false,
+          "_uiOpen": true,
+          "_uiMarkupPct": "10"
+        }
+      ],
+      "nde": []
+    }
+  }
+}
