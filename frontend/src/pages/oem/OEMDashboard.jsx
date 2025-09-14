@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Logo from '../../components/Logo';
 import { API_BASE } from "../../api/base";
 
 export default function OEMDashboard() {
@@ -108,18 +109,15 @@ export default function OEMDashboard() {
         alignItems: "center"
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
-          <div>
-            <h1 style={{ 
-              margin: 0, 
-              fontSize: "24px", 
-              fontWeight: "600",
-              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent"
-            }}>
-              BridgeLineUSA OEM Portal
-            </h1>
-            {user && (
+          <div className="logo-section">
+            <div className="logo-circle">BL</div>
+            <div className="company-info">
+              <div className="brand">BridgeLineUSA OEM Portal</div>
+              <div className="sub">South Coast Manufacturing, LLC</div>
+            </div>
+          </div>
+          {user && (
+            <div>
               <p style={{ 
                 margin: "4px 0 0 0", 
                 color: "#64748b", 
@@ -128,8 +126,8 @@ export default function OEMDashboard() {
                 Welcome back, {user.full_name || user.email}
                 {user.company && ` • ${user.company}`}
               </p>
-            )}
-          </div>
+            </div>
+          )}
           
           {/* Navigation Menu */}
           <nav style={{ display: "flex", gap: "24px" }}>
@@ -719,6 +717,40 @@ export default function OEMDashboard() {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+        
+        .logo-section{display:flex;align-items:center;gap:1rem}
+        .logo-circle{
+          width:50px;
+          height:50px;
+          background:#1e3a5f;
+          border-radius:50%;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          position:relative;
+          font-weight:bold;
+          font-size:18px;
+          color:#fff;
+        }
+        .logo-circle::after{
+          content:'✓';
+          position:absolute;
+          bottom:-2px;
+          right:-2px;
+          background:#00a884;
+          color:#fff;
+          width:18px;
+          height:18px;
+          border-radius:50%;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:10px;
+          border:2px solid #fff;
+        }
+        .company-info{display:flex;flex-direction:column}
+        .brand{font-weight:600;font-size:16px}
+        .sub{font-size:12px;color:#64748b}
       `}</style>
     </div>
   );

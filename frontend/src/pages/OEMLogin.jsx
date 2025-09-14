@@ -164,9 +164,9 @@ export default function MarketingSignInLanding() {
       <section className="hero">
         <div className="hero-text">
           <h1>
-            <span className="hero-title-main">The First AI-Integrated MES</span>
+            <span className="hero-title-main">The First AI-Powered MES</span>
             <br />
-            <span className="hero-title-bridge">Bridging OEMs & Manufacturers</span>
+            <span className="hero-title-bridge">Connecting OEMs and Manufacturers in Real Time</span>
           </h1>
           <p className="hero-subtitle">Revolutionary manufacturing platform that creates direct lines between OEMs and shop floors. From quotes to quality assurance — all powered by AI intelligence and real-time collaboration.</p>
           <div className="hero-actions">
