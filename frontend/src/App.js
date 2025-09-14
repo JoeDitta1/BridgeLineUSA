@@ -18,6 +18,7 @@ import ProductionRouter from "./pages/ProductionRouter";
 // Public site / auth
 import Marketing from "./pages/Marketing"; // make sure this file exists
 import Login from "./pages/Login";         // make sure this file exists
+import OEMLogin from "./pages/OEMLogin";   // OEM Partner login
 // Admin pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import Settings from "./pages/admin/Settings";
@@ -26,6 +27,8 @@ import Equipment from "./pages/admin/Equipment";
 import SystemMaterials from "./pages/admin/SystemMaterials";
 import SoftDeleteManager from "./pages/admin/SoftDeleteManager";
 import Backups from "./pages/admin/Backups";
+// OEM pages
+import OEMDashboard from "./pages/oem/OEMDashboard";
 
 const MKT_AT_ROOT = process.env.REACT_APP_MARKETING_AT_ROOT === "true";
 
@@ -82,6 +85,10 @@ export default function App() {
       {/* Public marketing & auth routes */}
       <Route path="/marketing" element={<Marketing />} />
       <Route path="/login" element={<Login />} />
+      
+      {/* OEM Portal routes */}
+      <Route path="/oem/login" element={<OEMLogin />} />
+      <Route path="/oem/dashboard" element={<OEMDashboard />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to={MKT_AT_ROOT ? "/marketing" : "/"} replace />} />

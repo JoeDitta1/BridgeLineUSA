@@ -2,6 +2,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import session from 'express-session';
 import path, { dirname } from 'path';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
@@ -20,6 +21,7 @@ import equipmentRoute from './routes/equipmentRoute.js';
 import systemMaterialsRoute from './routes/systemMaterialsRoute.js';
 import salesOrdersRoute from './routes/salesOrdersRoute.js';
 import backupRoute from './routes/backupRoute.js';
+import authRoute from './routes/authRoute.js';
 
 /* ------------------------- ES module __dirname shim ------------------------ */
 const __filename = fileURLToPath(import.meta.url);
@@ -129,6 +131,19 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
+
+// Session middleware for authentication
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'dev-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false, // Set to true in production with HTTPS
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
 app.use(express.json({ limit: '5mb' }));
 app.use('/api/quotes', customersRoute);
 
@@ -171,6 +186,7 @@ app.locals.paths = {
 };
 
 /* --------------------------------- Routes -------------------------------- */
+app.use('/api/auth', authRoute); // authentication endpoints
 app.use('/api/upload', uploadRoute);
 app.use('/api/materials', materialsRoute);
 app.use('/api/quotes', quotesRoute);

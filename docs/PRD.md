@@ -47,6 +47,9 @@ BridgeLineUSA will grow into a **multi-company network platform** supporting **h
 ---
 
 ## 3. Stakeholders & Users
+
+> **📋 Detailed Module Specifications**: For comprehensive specifications of Customer Module, OEM Module, and Facility Module, see [CUSTOMER_OEM_FACILITY_MODULES.md](./CUSTOMER_OEM_FACILITY_MODULES.md)
+
 - **OEMs (Customers)**: View quotes, submit POs, track jobs, see QC docs.  
 - **Manufacturers (SCM + network shops)**: Run Production Module, manage jobs.  
 - **SCM Internal Users**: Estimators, Admins, Production operators, QC inspectors.  

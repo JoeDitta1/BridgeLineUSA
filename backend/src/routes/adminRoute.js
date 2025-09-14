@@ -3,9 +3,13 @@ import path from "path";
 import fs from "fs";
 import * as dbModule from "../db.js";
 import { getSupabaseClient } from '../utils/supabaseClient.js';
+import { requireAuth } from './authRoute.js';
 
 const router = express.Router();
 const db = dbModule.default ?? dbModule.db ?? dbModule;
+
+// Get Supabase client for admin operations
+const supabase = getSupabaseClient();
 
 // Ensure kv_store table exists for API keys
 try {
@@ -154,20 +158,6 @@ router.post('/test-openai', async (req, res) => {
   } catch (e) {
     console.error('[admin:test-openai] error:', e);
     res.status(500).json({ ok: false, error: String(e?.message || e) });
-  }
-});
-
-router.get('/users', (req, res) => {
-  try {
-    let rows = [];
-    try {
-      rows = db.prepare?.("SELECT id, username AS name, email, role FROM users ORDER BY id DESC")?.all?.() || [];
-    } catch (_) {
-      rows = [];
-    }
-    res.json(rows);
-  } catch (e) {
-    res.status(500).json([]);
   }
 });
 
@@ -698,6 +688,645 @@ router.delete('/files/:fileId/permanent', async (req, res) => {
   } catch (error) {
     console.error('[admin] Error permanently deleting file:', error);
     res.status(500).json({ ok: false, error: 'Failed to permanently delete file' });
+  }
+});
+
+// User Management endpoints for OEM module
+
+// GET /api/admin/users - List all users
+router.get('/users', async (req, res) => {
+  try {
+    console.log('[admin:users] Starting user fetch...');
+    const { getSupabaseAdminClient } = await import('../utils/supabaseClient.js');
+    const adminClient = getSupabaseAdminClient();
+    
+    if (!adminClient) {
+      console.log('[admin:users] No admin client available');
+      return res.status(500).json({ ok: false, error: 'Supabase not configured' });
+    }
+
+    console.log('[admin:users] Fetching auth users...');
+    // Get users from Supabase Auth
+    const { data: authUsers, error: authError } = await adminClient.auth.admin.listUsers();
+    if (authError) {
+      console.error('[admin:users] Error fetching auth users:', authError);
+      return res.status(500).json({ ok: false, error: 'Failed to fetch users' });
+    }
+
+    console.log('[admin:users] Found', authUsers.users.length, 'auth users');
+
+    console.log('[admin:users] Fetching user profiles...');
+    // Get user profiles from our custom table
+    const { data: profiles, error: profileError } = await adminClient
+      .from('user_profiles')
+      .select('*');
+    
+    if (profileError) {
+      console.error('[admin:users] Error fetching user profiles:', profileError);
+    } else {
+      console.log('[admin:users] Found', profiles?.length || 0, 'profiles');
+    }
+
+    // Combine auth data with profile data
+    const users = authUsers.users.map(authUser => {
+      const profile = profiles?.find(p => p.user_id === authUser.id) || {};
+      return {
+        id: authUser.id,
+        email: authUser.email,
+        role: profile.role || 'staff',
+        company: profile.company || null,
+        full_name: profile.full_name || null,
+        created_at: authUser.created_at,
+        last_sign_in_at: authUser.last_sign_in_at,
+        is_active: !authUser.banned_until
+      };
+    });
+
+    res.json({ ok: true, users: users });
+  } catch (error) {
+    console.error('[admin:users] Error fetching users:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get specific user details
+router.get('/users/:userId', requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const { data: user, error } = await supabase
+      .from('users')
+      .select(`
+        *,
+        profiles (*)
+      `)
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error('[admin:user] Error fetching user:', error);
+      return res.status(404).json({ ok: false, error: 'User not found' });
+    }
+
+    res.json({ ok: true, user });
+  } catch (error) {
+    console.error('[admin:user] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Create new user
+router.post('/users', requireAuth, async (req, res) => {
+  try {
+    const { email, password, role = 'user', full_name, company } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ ok: false, error: 'Email and password are required' });
+    }
+
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
+
+    if (authError) {
+      console.error('[admin:create-user] Auth error:', authError);
+      return res.status(400).json({ ok: false, error: authError.message });
+    }
+
+    // Create profile
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: authData.user.id,
+        email,
+        full_name,
+        company,
+        role,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (profileError) {
+      console.error('[admin:create-user] Profile error:', profileError);
+      // Clean up auth user if profile creation fails
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      return res.status(400).json({ ok: false, error: profileError.message });
+    }
+
+    res.json({ 
+      ok: true, 
+      user: { ...authData.user, profiles: profile },
+      message: 'User created successfully'
+    });
+  } catch (error) {
+    console.error('[admin:create-user] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Update user
+router.put('/users/:userId', requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { email, role, full_name, company, active = true } = req.body;
+
+    // Update auth user email if provided
+    if (email) {
+      const { error: authError } = await supabase.auth.admin.updateUserById(userId, {
+        email
+      });
+
+      if (authError) {
+        console.error('[admin:update-user] Auth error:', authError);
+        return res.status(400).json({ ok: false, error: authError.message });
+      }
+    }
+
+    // Update profile
+    const updateData = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (email) updateData.email = email;
+    if (role) updateData.role = role;
+    if (full_name !== undefined) updateData.full_name = full_name;
+    if (company !== undefined) updateData.company = company;
+    updateData.active = active;
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .update(updateData)
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (profileError) {
+      console.error('[admin:update-user] Profile error:', profileError);
+      return res.status(400).json({ ok: false, error: profileError.message });
+    }
+
+    res.json({ 
+      ok: true, 
+      user: profile,
+      message: 'User updated successfully'
+    });
+  } catch (error) {
+    console.error('[admin:update-user] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Delete user
+router.delete('/users/:userId', requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Check if user exists
+    const { data: existingUser, error: checkError } = await supabase
+      .from('profiles')
+      .select('email, role')
+      .eq('id', userId)
+      .single();
+
+    if (checkError) {
+      return res.status(404).json({ ok: false, error: 'User not found' });
+    }
+
+    // Prevent deletion of admin users (safety check)
+    if (existingUser.role === 'admin') {
+      return res.status(403).json({ ok: false, error: 'Cannot delete admin users' });
+    }
+
+    // Delete from auth (this will cascade to profiles due to foreign key)
+    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+
+    if (authError) {
+      console.error('[admin:delete-user] Auth error:', authError);
+      return res.status(400).json({ ok: false, error: authError.message });
+    }
+
+    res.json({ 
+      ok: true, 
+      message: `User ${existingUser.email} deleted successfully`
+    });
+  } catch (error) {
+    console.error('[admin:delete-user] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Deactivate/Activate user
+router.patch('/users/:userId/status', requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { active } = req.body;
+
+    if (typeof active !== 'boolean') {
+      return res.status(400).json({ ok: false, error: 'Active status must be boolean' });
+    }
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .update({ 
+        active,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[admin:user-status] Error:', error);
+      return res.status(400).json({ ok: false, error: error.message });
+    }
+
+    res.json({ 
+      ok: true, 
+      user: profile,
+      message: `User ${active ? 'activated' : 'deactivated'} successfully`
+    });
+  } catch (error) {
+    console.error('[admin:user-status] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Reset user password
+router.post('/users/:userId/reset-password', requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ ok: false, error: 'New password is required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ ok: false, error: 'Password must be at least 6 characters' });
+    }
+
+    const { error } = await supabase.auth.admin.updateUserById(userId, {
+      password
+    });
+
+    if (error) {
+      console.error('[admin:reset-password] Error:', error);
+      return res.status(400).json({ ok: false, error: error.message });
+    }
+
+    res.json({ 
+      ok: true, 
+      message: 'Password reset successfully'
+    });
+  } catch (error) {
+    console.error('[admin:reset-password] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get user activity/sessions
+router.get('/users/:userId/activity', requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Get user sessions from Supabase Auth
+    const { data: sessions, error } = await supabase.auth.admin.listUserSessions(userId);
+
+    if (error) {
+      console.error('[admin:user-activity] Error:', error);
+      return res.status(400).json({ ok: false, error: error.message });
+    }
+
+    res.json({ 
+      ok: true, 
+      sessions: sessions || []
+    });
+  } catch (error) {
+    console.error('[admin:user-activity] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Bulk user operations
+router.post('/users/bulk', requireAuth, async (req, res) => {
+  try {
+    const { action, userIds } = req.body;
+
+    if (!action || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Invalid bulk operation data' });
+    }
+
+    let results = [];
+
+    switch (action) {
+      case 'activate':
+      case 'deactivate':
+        const active = action === 'activate';
+        const { data: updatedUsers, error: bulkError } = await supabase
+          .from('profiles')
+          .update({ 
+            active,
+            updated_at: new Date().toISOString()
+          })
+          .in('id', userIds)
+          .select();
+
+        if (bulkError) {
+          return res.status(400).json({ ok: false, error: bulkError.message });
+        }
+
+        results = updatedUsers;
+        break;
+
+      case 'delete':
+        // Prevent bulk deletion of admin users
+        const { data: adminCheck } = await supabase
+          .from('profiles')
+          .select('id, role')
+          .in('id', userIds)
+          .eq('role', 'admin');
+
+        if (adminCheck && adminCheck.length > 0) {
+          return res.status(403).json({ ok: false, error: 'Cannot bulk delete admin users' });
+        }
+
+        // Delete users
+        for (const userId of userIds) {
+          const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
+          if (deleteError) {
+            console.error(`[admin:bulk-delete] Error deleting user ${userId}:`, deleteError);
+          }
+        }
+        results = userIds.map(id => ({ id, deleted: true }));
+        break;
+
+      default:
+        return res.status(400).json({ ok: false, error: 'Invalid bulk action' });
+    }
+
+    res.json({ 
+      ok: true, 
+      results,
+      message: `Bulk ${action} completed successfully`
+    });
+  } catch (error) {
+    console.error('[admin:bulk-users] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// User search and filtering
+router.get('/users/search', requireAuth, async (req, res) => {
+  try {
+    const { 
+      q: searchQuery, 
+      role, 
+      active, 
+      company,
+      limit = 50,
+      offset = 0,
+      sortBy = 'created_at',
+      sortOrder = 'desc'
+    } = req.query;
+
+    let query = supabase
+      .from('profiles')
+      .select(`
+        id,
+        email,
+        full_name,
+        company,
+        role,
+        active,
+        created_at,
+        updated_at,
+        last_sign_in_at
+      `, { count: 'exact' });
+
+    // Apply filters
+    if (searchQuery) {
+      query = query.or(`email.ilike.%${searchQuery}%,full_name.ilike.%${searchQuery}%,company.ilike.%${searchQuery}%`);
+    }
+
+    if (role) {
+      query = query.eq('role', role);
+    }
+
+    if (active !== undefined) {
+      query = query.eq('active', active === 'true');
+    }
+
+    if (company) {
+      query = query.ilike('company', `%${company}%`);
+    }
+
+    // Apply sorting
+    query = query.order(sortBy, { ascending: sortOrder === 'asc' });
+
+    // Apply pagination
+    query = query.range(offset, offset + limit - 1);
+
+    const { data: users, error, count } = await query;
+
+    if (error) {
+      console.error('[admin:search-users] Error:', error);
+      return res.status(400).json({ ok: false, error: error.message });
+    }
+
+    res.json({ 
+      ok: true, 
+      users: users || [],
+      total: count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    console.error('[admin:search-users] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get user statistics
+router.get('/stats/users', requireAuth, async (req, res) => {
+  try {
+    // Total users
+    const { count: totalUsers, error: totalError } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true });
+
+    if (totalError) {
+      console.error('[admin:user-stats] Total users error:', totalError);
+      return res.status(400).json({ ok: false, error: totalError.message });
+    }
+
+    // Active users
+    const { count: activeUsers, error: activeError } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('active', true);
+
+    if (activeError) {
+      console.error('[admin:user-stats] Active users error:', activeError);
+      return res.status(400).json({ ok: false, error: activeError.message });
+    }
+
+    // Users by role
+    const { data: roleStats, error: roleError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('active', true);
+
+    if (roleError) {
+      console.error('[admin:user-stats] Role stats error:', roleError);
+      return res.status(400).json({ ok: false, error: roleError.message });
+    }
+
+    const roleCounts = roleStats.reduce((acc, user) => {
+      acc[user.role] = (acc[user.role] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Recent signups (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { count: recentSignups, error: recentError } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', thirtyDaysAgo.toISOString());
+
+    if (recentError) {
+      console.error('[admin:user-stats] Recent signups error:', recentError);
+      return res.status(400).json({ ok: false, error: recentError.message });
+    }
+
+    res.json({ 
+      ok: true, 
+      stats: {
+        total: totalUsers || 0,
+        active: activeUsers || 0,
+        inactive: (totalUsers || 0) - (activeUsers || 0),
+        recentSignups: recentSignups || 0,
+        byRole: roleCounts
+      }
+    });
+  } catch (error) {
+    console.error('[admin:user-stats] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// System health check
+router.get('/health', requireAuth, async (req, res) => {
+  try {
+    const healthChecks = {
+      database: false,
+      supabase: false,
+      timestamp: new Date().toISOString()
+    };
+
+    // Test database connection
+    try {
+      const { error: dbError } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true });
+      
+      healthChecks.database = !dbError;
+    } catch (error) {
+      console.error('[admin:health] Database check failed:', error);
+    }
+
+    // Test Supabase Auth
+    try {
+      const { data, error: authError } = await supabase.auth.admin.listUsers();
+      healthChecks.supabase = !authError;
+    } catch (error) {
+      console.error('[admin:health] Supabase Auth check failed:', error);
+    }
+
+    const allHealthy = Object.values(healthChecks).every(check => 
+      typeof check === 'boolean' ? check : true
+    );
+
+    res.status(allHealthy ? 200 : 503).json({ 
+      ok: allHealthy, 
+      health: healthChecks
+    });
+  } catch (error) {
+    console.error('[admin:health] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// System settings management
+router.get('/settings', requireAuth, async (req, res) => {
+  try {
+    // For now, return basic settings
+    // This could be expanded to read from a settings table
+    const settings = {
+      systemName: 'BridgeLine USA Admin',
+      version: '1.0.0',
+      features: {
+        userManagement: true,
+        bulkOperations: true,
+        userSearch: true,
+        systemHealth: true
+      },
+      limits: {
+        maxUsers: 1000,
+        sessionTimeout: 24 * 60 * 60 * 1000, // 24 hours
+        passwordMinLength: 6
+      }
+    };
+
+    res.json({ ok: true, settings });
+  } catch (error) {
+    console.error('[admin:settings] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Audit log (basic implementation)
+router.get('/audit', requireAuth, async (req, res) => {
+  try {
+    const { 
+      limit = 100,
+      offset = 0,
+      action,
+      userId,
+      startDate,
+      endDate
+    } = req.query;
+
+    // For now, return mock audit data
+    // In a real implementation, you'd have an audit_logs table
+    const auditLogs = [
+      {
+        id: 1,
+        timestamp: new Date().toISOString(),
+        action: 'user_created',
+        userId: 'sample-user-id',
+        adminId: req.user?.id,
+        details: { email: 'new@example.com' },
+        ipAddress: req.ip
+      }
+    ];
+
+    res.json({ 
+      ok: true, 
+      logs: auditLogs,
+      total: auditLogs.length,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    console.error('[admin:audit] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
   }
 });
 
