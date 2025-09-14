@@ -22,6 +22,7 @@ import systemMaterialsRoute from './routes/systemMaterialsRoute.js';
 import salesOrdersRoute from './routes/salesOrdersRoute.js';
 import backupRoute from './routes/backupRoute.js';
 import authRoute from './routes/authRoute.js';
+import oemRoute from './routes/oemRoute.js';
 
 /* ------------------------- ES module __dirname shim ------------------------ */
 const __filename = fileURLToPath(import.meta.url);
@@ -197,6 +198,7 @@ app.use('/api/equipment', equipmentRoute); // equipment endpoints
 app.use('/api/system-materials', systemMaterialsRoute);
 app.use('/api/sales-orders', salesOrdersRoute);
 app.use('/api/backups', backupRoute); // backup system
+app.use('/api/oem', oemRoute); // OEM portal endpoints
 
 // File routes mounted under /api/quotes to match frontend expectations
 app.use('/api/quotes', quoteFilesRoute);
