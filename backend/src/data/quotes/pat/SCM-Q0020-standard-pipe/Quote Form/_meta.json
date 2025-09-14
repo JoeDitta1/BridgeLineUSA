@@ -1,0 +1,60 @@
+{
+  "ok": true,
+  "quoteNo": "SCM-Q0020",
+  "customerName": "Pat",
+  "savedAt": "2025-08-29T14:12:16.496Z",
+  "form": {
+    "appState": {
+      "meta": {
+        "quoteNo": "",
+        "date": "2025-08-29",
+        "customerName": "Pat",
+        "estimatedBy": "Joe",
+        "requestor": "Joe",
+        "partNumber": "1624 5047 72",
+        "revision": "",
+        "description": "Standard Pipe",
+        "quality": "",
+        "requireSA": false,
+        "domesticOnly": false,
+        "originRestriction": "",
+        "receivingLaborHours": "",
+        "receivingRate": "75",
+        "notes": "Quote subject to review of customer PO and drawings. Lead time is an estimate and may vary after receipt of order & materials. NDE/testing per selection. Warranty per standard terms. This quote generated with AI-assisted manufacturing transparency.",
+        "paymentTerms": "",
+        "commissionPct": "",
+        "breakInFee": "",
+        "freightMethod": "",
+        "freightAmount": "",
+        "salesTaxPct": ""
+      },
+      "rows": [
+        {
+          "itemNo": "",
+          "material": null,
+          "unitType": "Per Foot",
+          "grade": "",
+          "lengthFt": "",
+          "qty": "",
+          "lengthIn": "",
+          "widthIn": "",
+          "heightIn": "",
+          "pricePerFt": "",
+          "pricePerLb": "",
+          "priceEach": "",
+          "totalWeight": "0.00",
+          "materialCost": "0.00",
+          "_costEach": "0.00",
+          "_outCost": 0,
+          "_procCost": 0,
+          "processes": [],
+          "outsourcing": [],
+          "padConventional": false,
+          "_uiOpen": true,
+          "_uiMarkupPct": ""
+        }
+      ],
+      "nde": []
+    }
+  }
+}

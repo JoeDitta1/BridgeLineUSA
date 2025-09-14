@@ -1,0 +1,16 @@
+{
+  "mainDb": "./backend/data/app.db",
+  "devDb": "./backend/data/dev_app.db",
+  "backupsDir": "./backend/data/dev_db_backups",
+  "tables": [
+    "materials",
+    "material_families",
+    "material_specs",
+    "material_sizes",
+    "parts",
+    "price_history",
+    "settings",
+    "equipment",
+    "equipment_docs"
+  ]
+}

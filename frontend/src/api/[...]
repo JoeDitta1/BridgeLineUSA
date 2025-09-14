@@ -1,0 +1,22 @@
+// frontend/src/api/index.js
+const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+
+// Example of how to use API_BASE with fetch
+export async function fetchQuotes() {
+  const response = await fetch(`${API_BASE}/api/quotes`);
+  if (!response.ok) {
+    throw new Error('Network response was not ok');
+  }
+  return response.json();
+}
+
+// Example of how to use API_BASE with axios
+import axios from 'axios';
+
+export function getQuoteById(id) {
+  return axios.get(`${API_BASE}/api/quotes/${id}`);
+}
+
+// ...existing code that uses API_BASE...
+
+export { API_BASE };
