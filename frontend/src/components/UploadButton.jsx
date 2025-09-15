@@ -80,11 +80,11 @@ export default function UploadButton({ onUploaded, quoteNo = '', subdir = 'uploa
           cursor: busy ? "not-allowed" : "pointer"
         }}
       >
-        {busy ? "Uploading..." : "Upload Drawing"}
+        {busy ? "Uploading..." : "Upload Files"}
       </button>
 
       {!quoteNo && (
-        <div style={{ fontSize: 12, color: '#6b7280' }}>Save the quote first to get a Quote Number, then upload drawings.</div>
+        <div style={{ fontSize: 12, color: '#6b7280' }}>Save the quote first to get a Quote Number, then upload files.</div>
       )}
 
       {last && Array.isArray(last) && last.length > 0 && (

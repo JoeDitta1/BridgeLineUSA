@@ -45,7 +45,17 @@ async function getQuoteDir(customerName, quoteNo) {
 /** Ensure standard subfolders & return { dir, subdirs } */
 async function ensureQuoteTree(customerName, quoteNo) {
   const dir = await getQuoteDir(customerName, quoteNo);
-  const subdirs = ['uploads', 'drawings', 'vendors', 'notes', 'exports'];
+  const subdirs = [
+    'drawings', 
+    'uploads', 
+    'vendor-quotes', 
+    'quality-info', 
+    'customer-notes', 
+    'photos', 
+    'exports', 
+    'internal-notes', 
+    'change-orders'
+  ];
   await fsp.mkdir(dir, { recursive: true });
   for (const s of subdirs) await fsp.mkdir(path.join(dir, s), { recursive: true });
   return { dir, subdirs };
@@ -102,7 +112,7 @@ router.get('/:quoteNo/files', async (req, res) => {
     try {
       console.log(`[FILE LISTING] Getting files for quote ${quoteNo} with params:`, req.query);
       const { getQuoteFilesFromSupabase } = await import('../utils/supabaseClient.js');
-      const supabaseFiles = await getQuoteFilesFromSupabase(quoteNo);
+      const supabaseFiles = await getQuoteFilesFromSupabase(quoteNo, req.query.section);
       
       console.log(`[FILE LISTING] Supabase returned ${supabaseFiles?.length || 0} files for quote ${quoteNo}:`, 
         supabaseFiles?.map(f => f.name || f.originalname).slice(0, 5) || []);

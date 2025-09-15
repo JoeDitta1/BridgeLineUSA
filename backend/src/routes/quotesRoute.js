@@ -218,7 +218,8 @@ function getNextQuoteNo() {
  */
 async function createCustomerQuoteFolders({ customerName, quoteNo, description }) {
   const customerSafe = safeFolderName(customerName) || 'unknown';
-  const baseName = `${quoteNo}-${safeFolderName(description || '')}`.replace(/-$/, '');
+  // Use same naming logic as ensureQuoteFolders: safeFolderName on both quoteNo and description
+  const baseName = `${safeFolderName(quoteNo)}-${safeFolderName(description || '')}`.replace(/-$/, '');
   const customerDir = path.join(VAULT_ROOT, customerSafe);
   await ensureDir(customerDir);
 
@@ -237,13 +238,18 @@ async function createCustomerQuoteFolders({ customerName, quoteNo, description }
   const quoteDir = path.join(customerDir, folderName);
   await ensureDir(quoteDir);
 
-  // Desired subfolders
+  // Use same subfolders as ensureQuoteFolders for consistency
   const subfolders = [
     'Quote Form',
-    'Vendor Quotes',
     'Drawings',
-    'Customer Info',
-    'Related Files',
+    'Vendor Quotes',
+    'Quality Info',
+    'Customer Notes',
+    'Photos',
+    'Exports',
+    'Internal Notes',
+    'Change Orders',
+    'Uploads',
   ];
   await Promise.all(subfolders.map((sf) => ensureDir(path.join(quoteDir, sf))));
 
@@ -927,7 +933,8 @@ async function saveMeta(req, res) {
     try {
       // Use existing DB row info (if present) to compute folder name and path.
       const customerSafe = safeFolderName(payload.customer_name) || 'unknown';
-      const baseName = `${finalQuoteNo}-${safeFolderName(payload.description || '')}`.replace(/-$/, '');
+      // Use same naming logic as ensureQuoteFolders: safeFolderName on both quoteNo and description
+      const baseName = `${safeFolderName(finalQuoteNo)}-${safeFolderName(payload.description || '')}`.replace(/-$/, '');
       // prefer the rev from the DB 'existing' row if present, otherwise payload.rev
       const revToUse = (existing && typeof existing.rev === 'number') ? existing.rev : (Number.isFinite(+payload.rev) ? +payload.rev : 0);
       const folderName = revToUse > 1 ? `${baseName}-rev-${revToUse}` : baseName;

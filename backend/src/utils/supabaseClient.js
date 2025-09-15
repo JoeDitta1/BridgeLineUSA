@@ -236,36 +236,48 @@ export async function uploadFileToSupabase(file, quoteNo, subdir, customerName) 
 }
 
 // Get files for a quote from Supabase
-export async function getQuoteFilesFromSupabase(quoteNo) {
+export async function getQuoteFilesFromSupabase(quoteNo, section = null) {
   const supabase = getSupabaseClient();
   if (!supabase) {
     console.warn('Supabase not configured, returning empty file list');
     return [];
   }
   
-  console.log(`[getQuoteFilesFromSupabase] Looking for files for quote: ${quoteNo}`);
+  console.log(`[getQuoteFilesFromSupabase] Looking for files for quote: ${quoteNo}${section ? `, section: ${section}` : ''}`);
   
   try {
     // Try to get from database first but don't fail if table structure is wrong
-    console.log(`[getQuoteFilesFromSupabase] Attempting database query for quote: ${quoteNo}`);
+    console.log(`[getQuoteFilesFromSupabase] Attempting database query for quote: ${quoteNo}${section ? `, section: ${section}` : ''}`);
     
     try {
       // Try to get from database first (check both quote_no and quote_id for compatibility)
       // Exclude soft-deleted files if deleted_at column exists
-      let { data, error } = await supabase
+      let query = supabase
         .from('quote_files')
         .select('*')
         .eq('quote_no', quoteNo)  // Try quote_no first
         .order('uploaded_at', { ascending: false });
         
-      // If quote_no column doesn't exist, try quote_id
+      // Add section filter if provided
+      if (section) {
+        query = query.eq('subdir', section);
+      }
+        
+      let { data, error } = await query;
       if (error && error.code === '42703' && error.message.includes('quote_no does not exist')) {
         console.log(`[getQuoteFilesFromSupabase] quote_no column doesn't exist, trying quote_id`);
-        const result = await supabase
+        let fallbackQuery = supabase
           .from('quote_files')
           .select('*')
           .eq('quote_id', quoteNo)  // Fallback to quote_id
           .order('uploaded_at', { ascending: false });
+          
+        // Add section filter if provided
+        if (section) {
+          fallbackQuery = fallbackQuery.eq('subdir', section);
+        }
+        
+        const result = await fallbackQuery;
         data = result.data;
         error = result.error;
       }
@@ -346,13 +358,35 @@ export async function getQuoteFilesFromSupabase(quoteNo) {
     }
     
     // Try multiple storage path patterns
-    const searchPaths = [
-      customerFolder ? `quotes/${customerFolder}/${quoteNo}` : null,           // /quotes/SLB/SCM-Q0062/
-      customerFolder ? `quotes/${customerFolder}/${quoteNo}/drawings` : null, // /quotes/SLB/SCM-Q0062/drawings/
-      `quotes/${quoteNo}`,           // /quotes/SCM-Q0062/
-      `quotes`,                      // /quotes/ (then filter)
-      `${quoteNo}`,                  // /SCM-Q0062/
-    ].filter(Boolean); // Remove null entries
+    const searchPaths = [];
+    
+    if (customerFolder) {
+      if (section) {
+        // If section is specified, only search in that specific subfolder
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}/${section}`);
+      } else {
+        // If no section specified, search in the main quote folder and all subfolders
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}`);
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}/drawings`);
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}/uploads`);
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}/vendor-quotes`);
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}/quality-info`);
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}/customer-notes`);
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}/photos`);
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}/exports`);
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}/internal-notes`);
+        searchPaths.push(`quotes/${customerFolder}/${quoteNo}/change-orders`);
+      }
+    }
+    
+    // Fallback paths if customer folder not found
+    if (section) {
+      searchPaths.push(`quotes/${quoteNo}/${section}`);
+    } else {
+      searchPaths.push(`quotes/${quoteNo}`);
+      searchPaths.push(`quotes`);
+      searchPaths.push(`${quoteNo}`);
+    }
     
     let allFiles = [];
     
@@ -381,7 +415,7 @@ export async function getQuoteFilesFromSupabase(quoteNo) {
           const nonDeletedFiles = relevantFiles.filter(file => {
             const isNotDeleted = !searchPath.includes('_deleted') && !file.name.includes('_deleted');
             const isNotFolder = file.metadata && file.metadata.mimetype !== null; // Folders have null mimetype
-            const isNotSystemFolder = !['drawings', 'uploads', 'vendors', 'notes', 'exports', '_deleted'].includes(file.name);
+            const isNotSystemFolder = !['drawings', 'uploads', 'vendor-quotes', 'quality-info', 'customer-notes', 'photos', 'exports', 'internal-notes', 'change-orders', '_deleted'].includes(file.name);
             const hasValidName = file.name && file.name.trim() !== '' && !file.name.startsWith('.');
             
             return isNotDeleted && isNotFolder && isNotSystemFolder && hasValidName;
@@ -449,11 +483,21 @@ export async function getQuoteFilesFromSupabase(quoteNo) {
           .from('quote-files')
           .getPublicUrl(fullPath);
           
+        // Determine subdir from the search path
+        let subdir = 'drawings'; // default
+        if (file.searchPath) {
+          const pathParts = file.searchPath.split('/');
+          const lastPart = pathParts[pathParts.length - 1];
+          if (['drawings', 'uploads', 'vendor-quotes', 'quality-info', 'customer-notes', 'photos', 'exports', 'internal-notes', 'change-orders'].includes(lastPart)) {
+            subdir = lastPart;
+          }
+        }
+          
         return {
           name: file.name,
           originalname: file.name,
           size: file.metadata?.size || 0,
-          subdir: 'drawings', // Default since we can't determine from storage alone
+          subdir: subdir,
           url: publicUrl,
           path: fullPath,
           modifiedAt: new Date(file.created_at || file.updated_at),

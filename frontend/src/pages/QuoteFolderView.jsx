@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { filePathToUrl } from "../lib/fileUrls";
+import FileUploadPad from "../components/FileUploadPad";
 
 const API_BASE = (process.env.REACT_APP_API_BASE || "http://localhost:4000").replace(/\/+$/, "");
 
@@ -136,6 +137,28 @@ export default function QuoteFolderView() {
       {loading && <div>Loading…</div>}
       {error && <div style={{ color:"#b00020" }}>Failed: {error}</div>}
       {!loading && !error && files.length === 0 && <div>No files found.</div>}
+
+      {/* Upload section - only show for non-quote-form sections */}
+      {!loading && !error && section !== 'quote-form' && (
+        <div style={{ margin: '16px 0' }}>
+          <FileUploadPad
+            quoteNo={quoteNo}
+            subdir={section}
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.zip,.dxf,.dwg,application/pdf,image/*,application/zip"
+            multiple={true}
+            customerName={customerName}
+            onComplete={(items) => {
+              console.log('Upload complete, refreshing file list:', items);
+              // Refresh the file list after upload
+              window.location.reload();
+            }}
+            onError={(error) => {
+              console.error('Upload error:', error);
+              alert(`Upload failed: ${error.message}`);
+            }}
+          />
+        </div>
+      )}
 
       {!loading && !error && files.length > 0 && (
         <>
