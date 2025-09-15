@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { requireJWTAuth } from './authRoute.js';
 
 const router = express.Router();
 
@@ -78,7 +79,7 @@ function sendSSE(res, data) {
 }
 
 // POST /api/backups/push-github - Push current branch to GitHub
-router.post('/push-github', async (req, res) => {
+router.post('/push-github', (req, res) => {
   try {
     // Get current branch
     const getBranch = spawn('git', ['branch', '--show-current'], {
@@ -172,45 +173,57 @@ router.post('/push-github', async (req, res) => {
                 });
               }
               
-              // Push to GitHub
-              const pushProcess = spawn('git', ['push', 'origin', currentBranch], {
+              // First push Git LFS objects
+              const lfsPushProcess = spawn('git', ['lfs', 'push', '--all', 'origin', currentBranch], {
                 stdio: ['ignore', 'pipe', 'pipe'],
                 cwd: '/workspaces/BridgeLineUSA'
               });
               
-              let pushOutput = '';
-              let pushError = '';
-              
-              pushProcess.stdout.on('data', (data) => {
-                pushOutput += data.toString();
-              });
-              
-              pushProcess.stderr.on('data', (data) => {
-                pushError += data.toString();
-              });
-              
-              pushProcess.on('close', (pushExitCode) => {
-                if (pushExitCode === 0) {
-                  res.json({ 
-                    ok: true, 
-                    message: `Successfully pushed ${commitsCount} commit(s) to GitHub`,
-                    branch: currentBranch,
-                    commits: commitsCount
-                  });
-                } else {
-                  console.error('Git push error:', pushError);
+              lfsPushProcess.on('close', (lfsCode) => {
+                if (lfsCode !== 0) {
+                  console.log('Git LFS push failed or not needed, continuing with git push');
+                }
+                
+                // Now push Git commits
+                const pushProcess = spawn('git', ['push', 'origin', currentBranch], {
+                  stdio: ['ignore', 'pipe', 'pipe'],
+                  cwd: '/workspaces/BridgeLineUSA'
+                });
+                
+                let pushOutput = '';
+                let pushError = '';
+                
+                pushProcess.stdout.on('data', (data) => {
+                  pushOutput += data.toString();
+                });
+                
+                pushProcess.stderr.on('data', (data) => {
+                  pushError += data.toString();
+                });
+                
+                pushProcess.on('close', (pushExitCode) => {
+                  if (pushExitCode === 0) {
+                    res.json({ 
+                      ok: true, 
+                      message: `Successfully pushed ${commitsCount} commit(s) to GitHub`,
+                      branch: currentBranch,
+                      commits: commitsCount
+                    });
+                  } else {
+                    console.error('Git push error:', pushError);
+                    res.status(500).json({ 
+                      ok: false, 
+                      error: `Failed to push to GitHub: ${pushError || 'Unknown error'}`
+                    });
+                  }
+                });
+                
+                pushProcess.on('error', (err) => {
+                  console.error('Git push spawn error:', err);
                   res.status(500).json({ 
                     ok: false, 
-                    error: `Failed to push to GitHub: ${pushError || 'Unknown error'}`
+                    error: `Failed to start git push: ${err.message}`
                   });
-                }
-              });
-              
-              pushProcess.on('error', (err) => {
-                console.error('Git push spawn error:', err);
-                res.status(500).json({ 
-                  ok: false, 
-                  error: `Failed to start git push: ${err.message}`
                 });
               });
             });
@@ -226,7 +239,7 @@ router.post('/push-github', async (req, res) => {
 });
 
 // POST /api/backups/run - Start a backup job
-router.post('/run', (req, res) => {
+router.post('/run', requireJWTAuth, (req, res) => {
   try {
     // Check if another job is running
     if (hasActiveJob()) {

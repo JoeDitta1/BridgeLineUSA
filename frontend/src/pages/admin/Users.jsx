@@ -5,7 +5,7 @@ const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:4000";
 
 // Helper function to get auth headers
 function getAuthHeaders() {
-  const token = localStorage.getItem('authToken');
+  const token = localStorage.getItem('jwt_token');
   const headers = { "Content-Type": "application/json" };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
