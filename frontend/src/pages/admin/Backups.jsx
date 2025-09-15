@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
+function getAuthHeaders() {
+  const token = localStorage.getItem("jwt_token");
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
 const Backups = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState([]);
@@ -21,7 +26,10 @@ const Backups = () => {
       // Start the backup job
       const response = await fetch('/api/backups/run', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        }
       });
       
       if (!response.ok) {
@@ -94,7 +102,10 @@ const Backups = () => {
     try {
       const response = await fetch('/api/backups/push-github', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        }
       });
       
       const data = await response.json();

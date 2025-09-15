@@ -3,6 +3,11 @@ import { Link } from "react-router-dom";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:4000";
 
+function getAuthHeaders() {
+  const token = localStorage.getItem("jwt_token");
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
 export default function Settings() {
   const [settings, setSettings] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -21,7 +26,10 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/admin/settings`, { credentials: "include" });
+      const res = await fetch(`${API_BASE}/api/admin/settings`, { 
+        headers: getAuthHeaders(),
+        credentials: "include" 
+      });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "Failed");
       const data = j.settings || j;
@@ -52,7 +60,10 @@ export default function Settings() {
 
       const res = await fetch(`${API_BASE}/api/admin/settings`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
         credentials: "include",
         body: JSON.stringify(payload)
       });
@@ -82,7 +93,10 @@ export default function Settings() {
     try {
       const res = await fetch(`${API_BASE}/api/admin/test-openai`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
         credentials: "include",
         body: JSON.stringify({ apiKey: openaiKey.trim() })
       });

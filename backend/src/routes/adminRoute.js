@@ -2,14 +2,14 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import * as dbModule from "../db.js";
-import { getSupabaseClient } from '../utils/supabaseClient.js';
-import { requireAuth } from './authRoute.js';
+import { getSupabaseClient, getSupabaseAdminClient } from '../utils/supabaseClient.js';
+import { requireAuth, requireJWTAuth } from './authRoute.js';
 
 const router = express.Router();
 const db = dbModule.default ?? dbModule.db ?? dbModule;
 
-// Get Supabase client for admin operations
-const supabase = getSupabaseClient();
+// Get Supabase admin client for admin operations
+const supabase = getSupabaseAdminClient();
 
 // Ensure kv_store table exists for API keys
 try {
@@ -694,14 +694,22 @@ router.delete('/files/:fileId/permanent', async (req, res) => {
 // User Management endpoints for OEM module
 
 // GET /api/admin/users - List all users
-router.get('/users', async (req, res) => {
+router.get('/users', requireJWTAuth, async (req, res) => {
   try {
     console.log('[admin:users] Starting user fetch...');
+    console.log('[admin:users] User from JWT:', req.user);
+
     const { getSupabaseAdminClient } = await import('../utils/supabaseClient.js');
     const adminClient = getSupabaseAdminClient();
     
     if (!adminClient) {
-      console.log('[admin:users] No admin client available');
+      console.log('[admin:users] No admin client available - checking kv_store...');
+      // Check kv_store directly
+      const db = (await import('../db.js')).default;
+      const urlRow = db.prepare("SELECT value FROM kv_store WHERE key = 'SUPABASE_URL'").get();
+      const serviceKeyRow = db.prepare("SELECT value FROM kv_store WHERE key = 'SUPABASE_SERVICE_KEY'").get();
+      console.log('[admin:users] SUPABASE_URL in kv_store:', urlRow?.value ? 'SET' : 'NOT SET');
+      console.log('[admin:users] SUPABASE_SERVICE_KEY in kv_store:', serviceKeyRow?.value ? 'SET' : 'NOT SET');
       return res.status(500).json({ ok: false, error: 'Supabase not configured' });
     }
 
@@ -738,7 +746,7 @@ router.get('/users', async (req, res) => {
         full_name: profile.full_name || null,
         created_at: authUser.created_at,
         last_sign_in_at: authUser.last_sign_in_at,
-        is_active: !authUser.banned_until
+        is_active: profile.is_active !== false && !authUser.banned_until // Default to true if column doesn't exist
       };
     });
 
@@ -750,7 +758,7 @@ router.get('/users', async (req, res) => {
 });
 
 // Get specific user details
-router.get('/users/:userId', requireAuth, async (req, res) => {
+router.get('/users/:userId', requireJWTAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -776,7 +784,7 @@ router.get('/users/:userId', requireAuth, async (req, res) => {
 });
 
 // Create new user
-router.post('/users', requireAuth, async (req, res) => {
+router.post('/users', requireJWTAuth, async (req, res) => {
   try {
     const { email, password, role = 'user', full_name, company } = req.body;
 
@@ -798,9 +806,9 @@ router.post('/users', requireAuth, async (req, res) => {
 
     // Create profile
     const { data: profile, error: profileError } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .insert({
-        id: authData.user.id,
+        user_id: authData.user.id,
         email,
         full_name,
         company,
@@ -830,7 +838,7 @@ router.post('/users', requireAuth, async (req, res) => {
 });
 
 // Update user
-router.put('/users/:userId', requireAuth, async (req, res) => {
+router.put('/users/:userId', requireJWTAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const { email, role, full_name, company, active = true } = req.body;
@@ -859,7 +867,7 @@ router.put('/users/:userId', requireAuth, async (req, res) => {
     updateData.active = active;
 
     const { data: profile, error: profileError } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .update(updateData)
       .eq('id', userId)
       .select()
@@ -882,13 +890,13 @@ router.put('/users/:userId', requireAuth, async (req, res) => {
 });
 
 // Delete user
-router.delete('/users/:userId', requireAuth, async (req, res) => {
+router.delete('/users/:userId', requireJWTAuth, async (req, res) => {
   try {
     const { userId } = req.params;
 
     // Check if user exists
     const { data: existingUser, error: checkError } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .select('email, role')
       .eq('id', userId)
       .single();
@@ -921,7 +929,7 @@ router.delete('/users/:userId', requireAuth, async (req, res) => {
 });
 
 // Deactivate/Activate user
-router.patch('/users/:userId/status', requireAuth, async (req, res) => {
+router.patch('/users/:userId/status', requireJWTAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const { active } = req.body;
@@ -931,7 +939,7 @@ router.patch('/users/:userId/status', requireAuth, async (req, res) => {
     }
 
     const { data: profile, error } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .update({ 
         active,
         updated_at: new Date().toISOString()
@@ -957,7 +965,7 @@ router.patch('/users/:userId/status', requireAuth, async (req, res) => {
 });
 
 // Reset user password
-router.post('/users/:userId/reset-password', requireAuth, async (req, res) => {
+router.post('/users/:userId/reset-password', requireJWTAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const { password } = req.body;
@@ -990,7 +998,7 @@ router.post('/users/:userId/reset-password', requireAuth, async (req, res) => {
 });
 
 // Get user activity/sessions
-router.get('/users/:userId/activity', requireAuth, async (req, res) => {
+router.get('/users/:userId/activity', requireJWTAuth, async (req, res) => {
   try {
     const { userId } = req.params;
 
@@ -1013,7 +1021,7 @@ router.get('/users/:userId/activity', requireAuth, async (req, res) => {
 });
 
 // Bulk user operations
-router.post('/users/bulk', requireAuth, async (req, res) => {
+router.post('/users/bulk', requireJWTAuth, async (req, res) => {
   try {
     const { action, userIds } = req.body;
 
@@ -1028,7 +1036,7 @@ router.post('/users/bulk', requireAuth, async (req, res) => {
       case 'deactivate':
         const active = action === 'activate';
         const { data: updatedUsers, error: bulkError } = await supabase
-          .from('profiles')
+          .from('user_profiles')
           .update({ 
             active,
             updated_at: new Date().toISOString()
@@ -1046,7 +1054,7 @@ router.post('/users/bulk', requireAuth, async (req, res) => {
       case 'delete':
         // Prevent bulk deletion of admin users
         const { data: adminCheck } = await supabase
-          .from('profiles')
+          .from('user_profiles')
           .select('id, role')
           .in('id', userIds)
           .eq('role', 'admin');
@@ -1081,7 +1089,7 @@ router.post('/users/bulk', requireAuth, async (req, res) => {
 });
 
 // User search and filtering
-router.get('/users/search', requireAuth, async (req, res) => {
+router.get('/users/search', requireJWTAuth, async (req, res) => {
   try {
     const { 
       q: searchQuery, 
@@ -1095,7 +1103,7 @@ router.get('/users/search', requireAuth, async (req, res) => {
     } = req.query;
 
     let query = supabase
-      .from('profiles')
+      .from('user_profiles')
       .select(`
         id,
         email,
@@ -1152,11 +1160,11 @@ router.get('/users/search', requireAuth, async (req, res) => {
 });
 
 // Get user statistics
-router.get('/stats/users', requireAuth, async (req, res) => {
+router.get('/stats/users', requireJWTAuth, async (req, res) => {
   try {
     // Total users
     const { count: totalUsers, error: totalError } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .select('*', { count: 'exact', head: true });
 
     if (totalError) {
@@ -1166,7 +1174,7 @@ router.get('/stats/users', requireAuth, async (req, res) => {
 
     // Active users
     const { count: activeUsers, error: activeError } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .select('*', { count: 'exact', head: true })
       .eq('active', true);
 
@@ -1177,7 +1185,7 @@ router.get('/stats/users', requireAuth, async (req, res) => {
 
     // Users by role
     const { data: roleStats, error: roleError } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .select('role')
       .eq('active', true);
 
@@ -1196,7 +1204,7 @@ router.get('/stats/users', requireAuth, async (req, res) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const { count: recentSignups, error: recentError } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .select('*', { count: 'exact', head: true })
       .gte('created_at', thirtyDaysAgo.toISOString());
 
@@ -1222,7 +1230,7 @@ router.get('/stats/users', requireAuth, async (req, res) => {
 });
 
 // System health check
-router.get('/health', requireAuth, async (req, res) => {
+router.get('/health', requireJWTAuth, async (req, res) => {
   try {
     const healthChecks = {
       database: false,
@@ -1233,7 +1241,7 @@ router.get('/health', requireAuth, async (req, res) => {
     // Test database connection
     try {
       const { error: dbError } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select('id', { count: 'exact', head: true });
       
       healthChecks.database = !dbError;
@@ -1264,7 +1272,7 @@ router.get('/health', requireAuth, async (req, res) => {
 });
 
 // System settings management
-router.get('/settings', requireAuth, async (req, res) => {
+router.get('/settings', requireJWTAuth, async (req, res) => {
   try {
     // For now, return basic settings
     // This could be expanded to read from a settings table
@@ -1292,7 +1300,7 @@ router.get('/settings', requireAuth, async (req, res) => {
 });
 
 // Audit log (basic implementation)
-router.get('/audit', requireAuth, async (req, res) => {
+router.get('/audit', requireJWTAuth, async (req, res) => {
   try {
     const { 
       limit = 100,

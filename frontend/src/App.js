@@ -18,8 +18,7 @@ import ProductionRouter from "./pages/ProductionRouter";
 // Public site / auth
 import Marketing from "./pages/Marketing"; // make sure this file exists
 import Login from "./pages/Login";         // make sure this file exists
-import OEMLogin from "./pages/OEMLogin";   // OEM Partner login
-// Admin pages
+import OEMLogin from './pages/OEMLogin';
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import Settings from "./pages/admin/Settings";
 import Users from "./pages/admin/Users";
@@ -43,7 +42,8 @@ export default function App() {
   return (
     <Routes>
       {/* Root: toggle between Marketing and App Home */}
-      <Route path="/" element={MKT_AT_ROOT ? <Marketing /> : <Home />} />
+              <Route path="/" element={<OEMLogin />} />
+        <Route path="/dashboard" element={<Home />} />
 
       {/* Always provide a direct App entry so employees can bypass marketing */}
       <Route path="/app" element={<Home />} />

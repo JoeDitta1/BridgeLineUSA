@@ -1,6 +1,7 @@
 // backend/src/routes/authRoute.js
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
@@ -61,8 +62,23 @@ router.post('/login', async (req, res) => {
     req.session.userEmail = authData.user.email;
     req.session.userRole = profile.role;
 
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        userId: authData.user.id,
+        email: authData.user.email,
+        role: profile.role
+      },
+      process.env.JWT_SECRET || 'dev-jwt-secret',
+      { expiresIn: '24h' }
+    );
+
+    // Force session save
+    req.session.save();
+
     res.json({
       success: true,
+      token: token,
       user: {
         id: authData.user.id,
         email: authData.user.email,
@@ -85,7 +101,58 @@ router.post('/login', async (req, res) => {
 // Check authentication status
 router.get('/check', async (req, res) => {
   try {
+    // Check for JWT token in Authorization header
+    const authHeader = req.headers.authorization;
+    let token = null;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-jwt-secret');
+        console.log('JWT auth check - decoded:', decoded);
+        
+        // Get current user profile
+        const { data: profile, error } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('user_id', decoded.userId)
+          .single();
+
+        if (error) {
+          console.log('Profile fetch error:', error);
+          return res.json({ authenticated: false });
+        }
+
+        return res.json({
+          authenticated: true,
+          user: {
+            id: decoded.userId,
+            email: decoded.email,
+            role: profile.role,
+            company: profile.company,
+            full_name: profile.full_name,
+            is_active: profile.is_active
+          }
+        });
+      } catch (jwtError) {
+        console.log('JWT verification failed:', jwtError.message);
+        return res.json({ authenticated: false });
+      }
+    }
+
+    // Fallback to session-based auth
+    console.log('Auth check - Session ID:', req.sessionID);
+    console.log('Auth check - Session data:', {
+      userId: req.session.userId,
+      userEmail: req.session.userEmail,
+      userRole: req.session.userRole
+    });
+    
     if (!req.session.userId) {
+      console.log('Auth check - No userId in session');
       return res.json({ authenticated: false });
     }
 
@@ -135,6 +202,86 @@ router.post('/logout', (req, res) => {
   });
 });
 
+// Middleware to check JWT authentication
+const requireJWTAuth = async (req, res, next) => {
+  try {
+    // Check for JWT token in Authorization header
+    const authHeader = req.headers.authorization;
+    let token = null;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+
+    if (!token) {
+      return res.status(401).json({ 
+        error: 'Authentication required - no JWT token provided' 
+      });
+    }
+
+    // Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-jwt-secret');
+    
+    // Get current user profile to ensure user still exists and is active
+    const { data: profile, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', decoded.userId)
+      .single();
+
+    if (error || !profile) {
+      console.log('JWT auth failed - user not found:', {
+        userId: decoded.userId,
+        error: error?.message
+      });
+      return res.status(401).json({ 
+        error: 'Authentication failed - user not found' 
+      });
+    }
+
+    console.log('JWT auth - user profile:', {
+      userId: decoded.userId,
+      email: decoded.email,
+      role: profile.role,
+      is_active: profile.is_active,
+      full_name: profile.full_name
+    });
+
+    // Check if user is active (handle missing is_active column)
+    const isActive = profile.is_active !== false; // Default to true if column doesn't exist
+    const isAdmin = profile.role === 'admin' || decoded.email === 'johnjoseph.clark@atlascopco.com'; // TEMP: Allow this user admin access
+
+    if (!isActive && !isAdmin) {
+      console.log('JWT auth failed - user inactive and not admin:', {
+        userId: decoded.userId,
+        email: decoded.email,
+        role: profile.role,
+        is_active: profile.is_active
+      });
+      return res.status(401).json({ 
+        error: 'Authentication failed - user account is inactive' 
+      });
+    }
+
+    // Attach user info to request
+    req.user = {
+      id: decoded.userId,
+      email: decoded.email,
+      role: profile.role,
+      company: profile.company,
+      full_name: profile.full_name,
+      is_active: profile.is_active
+    };
+
+    next();
+  } catch (jwtError) {
+    console.log('JWT authentication failed:', jwtError.message);
+    return res.status(401).json({ 
+      error: 'Authentication failed - invalid JWT token' 
+    });
+  }
+};
+
 // Middleware to check if user is authenticated
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
@@ -165,4 +312,4 @@ const requireRole = (role) => {
 };
 
 export default router;
-export { requireAuth, requireRole };
+export { requireAuth, requireRole, requireJWTAuth };

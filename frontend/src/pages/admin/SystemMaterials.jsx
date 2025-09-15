@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 
 const API_BASE = process.env.REACT_APP_API_BASE || '';
 
+function getAuthHeaders() {
+  const token = localStorage.getItem("jwt_token");
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
 export default function SystemMaterials() {
   const [families, setFamilies] = useState([]);
   const [specs, setSpecs] = useState([]);
@@ -20,9 +25,9 @@ export default function SystemMaterials() {
     try {
       setBusy(true); setErr('');
       const [fRes, sRes, zRes] = await Promise.all([
-        fetch(`${API_BASE}/api/system-materials/families`),
-        fetch(`${API_BASE}/api/system-materials/specs`),
-        fetch(`${API_BASE}/api/system-materials/sizes`)
+        fetch(`${API_BASE}/api/system-materials/families`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/system-materials/specs`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/system-materials/sizes`, { headers: getAuthHeaders() })
       ]);
       const [fJ, sJ, zJ] = await Promise.all([fRes.json(), sRes.json(), zRes.json()]);
       if (!fRes.ok) throw new Error(fJ.error || 'families load failed');
@@ -43,7 +48,14 @@ export default function SystemMaterials() {
       setBusy(true); setErr('');
       const method = familyForm.id ? 'PUT' : 'POST';
       const url = familyForm.id ? `${API_BASE}/api/system-materials/families/${familyForm.id}` : `${API_BASE}/api/system-materials/families`;
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: familyForm.name }) });
+      const res = await fetch(url, { 
+        method, 
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        }, 
+        body: JSON.stringify({ name: familyForm.name }) 
+      });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'family save failed');
       setFamilyForm({ id: null, name: '' });
@@ -52,7 +64,7 @@ export default function SystemMaterials() {
   }
 
   async function editFamily(f) { setFamilyForm({ id: f.id, name: f.name }); }
-  async function deleteFamily(id) { if (!confirm('Delete family?')) return; await fetch(`${API_BASE}/api/system-materials/families/${id}`, { method: 'DELETE' }); await loadAll(); }
+  async function deleteFamily(id) { if (!confirm('Delete family?')) return; await fetch(`${API_BASE}/api/system-materials/families/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); await loadAll(); }
 
   // Spec actions
   async function saveSpec(e) {
@@ -61,7 +73,14 @@ export default function SystemMaterials() {
       setBusy(true); setErr('');
       const method = specForm.id ? 'PUT' : 'POST';
       const url = specForm.id ? `${API_BASE}/api/system-materials/specs/${specForm.id}` : `${API_BASE}/api/system-materials/specs`;
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(specForm) });
+      const res = await fetch(url, { 
+        method, 
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        }, 
+        body: JSON.stringify(specForm) 
+      });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'spec save failed');
       setSpecForm({ id: null, family_id: '', grade: '', density: '', unit: '', notes: '', ai_searchable: 1 });
@@ -69,7 +88,7 @@ export default function SystemMaterials() {
     } catch (e) { setErr(String(e?.message || e)); } finally { setBusy(false); }
   }
   function editSpec(s) { setSpecForm({ id: s.id, family_id: s.family_id, grade: s.grade, density: s.density, unit: s.unit, notes: s.notes, ai_searchable: s.ai_searchable }); }
-  async function deleteSpec(id) { if (!confirm('Delete spec?')) return; await fetch(`${API_BASE}/api/system-materials/specs/${id}`, { method: 'DELETE' }); await loadAll(); }
+  async function deleteSpec(id) { if (!confirm('Delete spec?')) return; await fetch(`${API_BASE}/api/system-materials/specs/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); await loadAll(); }
 
   // Size actions
   async function saveSize(e) {
@@ -78,7 +97,14 @@ export default function SystemMaterials() {
       setBusy(true); setErr('');
       const method = sizeForm.id ? 'PUT' : 'POST';
       const url = sizeForm.id ? `${API_BASE}/api/system-materials/sizes/${sizeForm.id}` : `${API_BASE}/api/system-materials/sizes`;
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sizeForm) });
+      const res = await fetch(url, { 
+        method, 
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        }, 
+        body: JSON.stringify(sizeForm) 
+      });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'size save failed');
       setSizeForm({ id: null, family_id: '', size_label: '', dims_json: '' });
@@ -86,7 +112,7 @@ export default function SystemMaterials() {
     } catch (e) { setErr(String(e?.message || e)); } finally { setBusy(false); }
   }
   function editSize(s) { setSizeForm({ id: s.id, family_id: s.family_id, size_label: s.size_label, dims_json: s.dims_json }); }
-  async function deleteSize(id) { if (!confirm('Delete size?')) return; await fetch(`${API_BASE}/api/system-materials/sizes/${id}`, { method: 'DELETE' }); await loadAll(); }
+  async function deleteSize(id) { if (!confirm('Delete size?')) return; await fetch(`${API_BASE}/api/system-materials/sizes/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); await loadAll(); }
 
   return (
     <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto' }}>

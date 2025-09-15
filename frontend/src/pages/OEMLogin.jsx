@@ -32,8 +32,12 @@ export default function MarketingSignInLanding() {
         });
         const data = await response.json();
         
-        if (data.authenticated && data.user?.role === 'oem') {
-          nav('/oem/dashboard', { replace: true });
+        if (data.authenticated) {
+          if (data.user?.role === 'oem') {
+            nav('/oem/dashboard', { replace: true });
+          } else if (data.user?.role === 'manufacturer' || data.user?.role === 'admin') {
+            nav('/dashboard', { replace: true });
+          }
         }
       } catch (err) {
         console.log('Auth check failed:', err);
@@ -49,12 +53,20 @@ export default function MarketingSignInLanding() {
 
   async function handleLogin(e) {
     e.preventDefault();
+    console.log('Login attempt:', { email, password: password ? '***' : '' });
     setError(null);
-    if (!validateEmail(email)) return setError("Please enter a valid email address.");
-    if (!password) return setError("Please enter your password.");
-    
+    if (!validateEmail(email)) {
+      console.log('Email validation failed');
+      return setError("Please enter a valid email address.");
+    }
+    if (!password) {
+      console.log('Password validation failed');
+      return setError("Please enter your password.");
+    }
+
+    console.log('Starting login request...');
     setLoading(true);
-    
+
     try {
       const response = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
@@ -65,17 +77,32 @@ export default function MarketingSignInLanding() {
         body: JSON.stringify({ email, password })
       });
 
+      console.log('Login response:', response.status, response.ok);
       const data = await response.json();
+      console.log('Login data:', data);
 
       if (response.ok && data.success) {
-        // Check if user has OEM role
+        console.log('Login successful, user role:', data.user?.role);
+        // Store JWT token
+        if (data.token) {
+          localStorage.setItem('authToken', data.token);
+          console.log('Stored JWT token');
+        }
+        // Redirect based on user role
         if (data.user?.role === 'oem') {
           const from = location.state?.from?.pathname || '/oem/dashboard';
+          console.log('Redirecting OEM to:', from);
+          nav(from, { replace: true });
+        } else if (data.user?.role === 'manufacturer' || data.user?.role === 'admin') {
+          const from = location.state?.from?.pathname || '/dashboard';
+          console.log('Redirecting manufacturer/admin to:', from);
           nav(from, { replace: true });
         } else {
-          setError('Access denied. OEM credentials required.');
+          console.log('Invalid user role:', data.user?.role);
+          setError('Access denied. Invalid user role.');
         }
       } else {
+        console.log('Login failed:', data.message);
         setError(data.message || 'Login failed. Please check your credentials.');
       }
     } catch (err) {

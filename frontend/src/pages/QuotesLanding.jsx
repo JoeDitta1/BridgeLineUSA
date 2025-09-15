@@ -12,13 +12,13 @@ export default function QuotesLanding() {
         <div className="logo-section">
           <div className="logo"></div>
           <div className="breadcrumb">
-            <Link to="/">Dashboard</Link>
+            <Link to="/dashboard">Dashboard</Link>
             <span>›</span>
             <span>Quotes</span>
           </div>
         </div>
         <div className="nav-section">
-          <Link to="/" className="back-btn">← Back to Dashboard</Link>
+          <Link to="/dashboard" className="back-btn">← Back to Dashboard</Link>
         </div>
       </header>
 

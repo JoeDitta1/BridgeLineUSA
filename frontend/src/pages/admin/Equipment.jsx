@@ -3,6 +3,11 @@ import { Link } from "react-router-dom";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "";
 
+function getAuthHeaders() {
+  const token = localStorage.getItem("jwt_token");
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
 export default function Equipment() {
   const [list, setList] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -15,7 +20,9 @@ export default function Equipment() {
   async function load() {
     try {
       setErr(""); setBusy(true);
-      const res = await fetch(`${API_BASE}/api/equipment`);
+      const res = await fetch(`${API_BASE}/api/equipment`, {
+        headers: getAuthHeaders()
+      });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "Failed");
       setList(j.equipment || []);
@@ -42,7 +49,14 @@ export default function Equipment() {
       };
       const url = form.id ? `${API_BASE}/api/equipment/${form.id}` : `${API_BASE}/api/equipment`;
       const method = form.id ? "PUT" : "POST";
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const res = await fetch(url, { 
+        method, 
+        headers: { 
+          "Content-Type": "application/json",
+          ...getAuthHeaders()
+        }, 
+        body: JSON.stringify(payload) 
+      });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "Save failed");
       await load();
@@ -68,7 +82,10 @@ export default function Equipment() {
     if (!window.confirm("Delete equipment?")) return;
     try {
       setBusy(true);
-      const res = await fetch(`${API_BASE}/api/equipment/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/api/equipment/${id}`, { 
+        method: "DELETE",
+        headers: getAuthHeaders()
+      });
       if (!res.ok) throw new Error("Delete failed");
       await load();
     } catch (e) {
@@ -85,7 +102,11 @@ export default function Equipment() {
       const fd = new FormData();
       fd.append("file", selectedFile);
       fd.append("label", selectedFile.name);
-      const res = await fetch(`${API_BASE}/api/equipment/${form.id}/manual`, { method: "POST", body: fd });
+      const res = await fetch(`${API_BASE}/api/equipment/${form.id}/manual`, { 
+        method: "POST", 
+        headers: getAuthHeaders(),
+        body: fd 
+      });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "Upload failed");
       await load();
@@ -98,7 +119,7 @@ export default function Equipment() {
   return (
     <div style={{ padding: 20, maxWidth: 1000, margin: "0 auto" }}>
       <div style={{ marginBottom: 12 }}>
-        <Link to="/">← Back to Dashboard</Link>
+        <Link to="/dashboard">← Back to Dashboard</Link>
       </div>
       <h1>Equipment</h1>
 

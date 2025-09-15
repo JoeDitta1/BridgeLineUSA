@@ -3,6 +3,11 @@ import { Link } from "react-router-dom";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:4000";
 
+function getAuthHeaders() {
+  const token = localStorage.getItem("jwt_token");
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
 export default function SoftDeleteManager() {
   const [deletedQuotes, setDeletedQuotes] = useState([]);
   const [deletedCustomers, setDeletedCustomers] = useState([]);

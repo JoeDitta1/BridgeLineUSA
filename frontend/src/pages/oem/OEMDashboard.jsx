@@ -21,17 +21,39 @@ export default function OEMDashboard() {
   useEffect(() => {
     // Check authentication and load user data
     const checkAuth = async () => {
+      console.log('OEMDashboard: Checking auth...');
       try {
+        const token = localStorage.getItem('authToken');
+        const headers = {
+          'Content-Type': 'application/json'
+        };
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         const response = await fetch(`${API_BASE}/api/auth/check`, {
+          method: 'GET',
+          headers: headers,
           credentials: 'include'
         });
         const data = await response.json();
+        console.log('OEMDashboard: Auth check response:', response.status, data);
+        console.log('OEMDashboard: Response headers:', [...response.headers.entries()]);
         
-        if (!data.authenticated || data.user?.role !== 'oem') {
+        if (!data.authenticated) {
+          console.log('OEMDashboard: Not authenticated, redirecting to login');
           nav('/oem/login');
           return;
         }
         
+        if (data.user?.role !== 'oem') {
+          console.log('OEMDashboard: User role is not OEM:', data.user?.role, 'redirecting to login');
+          nav('/oem/login');
+          return;
+        }
+        
+        console.log('OEMDashboard: Auth check passed, setting user');
         setUser(data.user);
         
         // Load OEM dashboard data

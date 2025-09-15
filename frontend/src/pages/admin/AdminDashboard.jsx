@@ -3,6 +3,11 @@ import { Link } from "react-router-dom";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:4000";
 
+function getAuthHeaders() {
+  const token = localStorage.getItem("jwt_token");
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState("");
@@ -11,7 +16,10 @@ export default function AdminDashboard() {
     let alive = true;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/admin/stats`, { credentials: "include" });
+        const res = await fetch(`${API_BASE}/api/admin/stats`, { 
+          headers: getAuthHeaders(),
+          credentials: "include" 
+        });
         const j = await res.json();
         if (!alive) return;
         if (!res.ok) throw new Error(j?.error || "Failed");
@@ -26,7 +34,7 @@ export default function AdminDashboard() {
   return (
     <div style={{ padding: 20, maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ marginBottom: 12 }}>
-        <Link to="/" style={{ textDecoration: "none", color: "#111" }}>← Back to Dashboard</Link>
+        <Link to="/dashboard" style={{ textDecoration: "none", color: "#111" }}>← Back to Dashboard</Link>
       </div>
       <h1>Admin Dashboard</h1>
       <div style={{ display: "flex", gap: 12, marginBottom: 18 }}>

@@ -3,6 +3,16 @@ import { Link } from "react-router-dom";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:4000";
 
+// Helper function to get auth headers
+function getAuthHeaders() {
+  const token = localStorage.getItem('authToken');
+  const headers = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 export default function Users() {
   const [users, setUsers] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -23,7 +33,10 @@ export default function Users() {
     try {
       setErr(""); setBusy(true);
       console.log('Loading users from:', `${API_BASE}/api/admin/users`);
-      const r = await fetch(`${API_BASE}/api/admin/users`, { credentials: "include" });
+      const r = await fetch(`${API_BASE}/api/admin/users`, { 
+        headers: getAuthHeaders(),
+        credentials: "include" 
+      });
       const j = await r.json();
       console.log('Users response:', j);
       if (!r.ok) throw new Error(j?.error || "Failed");
@@ -50,7 +63,7 @@ export default function Users() {
 
       const response = await fetch(`${API_BASE}/api/admin/users`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         credentials: "include",
         body: JSON.stringify(newUser)
       });
@@ -78,6 +91,7 @@ export default function Users() {
       setErr(""); setSuccess(""); setBusy(true);
       const response = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
         credentials: "include"
       });
 
@@ -106,7 +120,10 @@ export default function Users() {
       setErr(""); setSuccess(""); setBusy(true);
       const response = await fetch(`${API_BASE}/api/admin/users/${userId}/reset-password`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...getAuthHeaders()
+        },
         credentials: "include",
         body: JSON.stringify({ newPassword })
       });
@@ -132,7 +149,10 @@ export default function Users() {
       setErr(""); setSuccess(""); setBusy(true);
       const response = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...getAuthHeaders()
+        },
         credentials: "include",
         body: JSON.stringify({ is_active: !currentStatus })
       });
@@ -413,7 +433,10 @@ export default function Users() {
               
               fetch(`${API_BASE}/api/admin/users/${editingUser.id}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                  "Content-Type": "application/json",
+                  ...getAuthHeaders()
+                },
                 credentials: "include",
                 body: JSON.stringify(updates)
               })
