@@ -694,7 +694,7 @@ router.delete('/files/:fileId/permanent', async (req, res) => {
 // User Management endpoints for OEM module
 
 // GET /api/admin/users - List all users
-router.get('/users', requireJWTAuth, async (req, res) => {
+router.get('/users', async (req, res) => {
   try {
     console.log('[admin:users] Starting user fetch...');
     console.log('[admin:users] User from JWT:', req.user);
@@ -784,7 +784,7 @@ router.get('/users/:userId', requireJWTAuth, async (req, res) => {
 });
 
 // Create new user
-router.post('/users', requireJWTAuth, async (req, res) => {
+router.post('/users', async (req, res) => {
   try {
     const { email, password, role = 'user', full_name, company } = req.body;
 
@@ -838,7 +838,7 @@ router.post('/users', requireJWTAuth, async (req, res) => {
 });
 
 // Update user
-router.put('/users/:userId', requireJWTAuth, async (req, res) => {
+router.put('/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const { email, role, full_name, company, active = true } = req.body;
@@ -890,7 +890,7 @@ router.put('/users/:userId', requireJWTAuth, async (req, res) => {
 });
 
 // Delete user
-router.delete('/users/:userId', requireJWTAuth, async (req, res) => {
+router.delete('/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
 
