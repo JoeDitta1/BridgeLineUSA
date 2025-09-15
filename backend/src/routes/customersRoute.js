@@ -54,68 +54,76 @@ router.get('/customers', async (_req, res) => {
       let lastUpdated = 0;
       let shouldSkipCustomer = false; // Flag to skip this customer
 
+      // First, check if this customer was explicitly soft-deleted
       try {
-        const qents = await fsp.readdir(cdir, { withFileTypes: true });
-        for (const q of qents) {
-          if (!q.isDirectory()) continue;
-          totalQuoteCount++; // Count all filesystem quotes
+        // Check multiple potential customer name variations to handle case sensitivity
+        const customerVariations = [
+          name,
+          name.toLowerCase(),
+          name.toUpperCase(),
+          decodeURIComponent(name),
+          decodeURIComponent(name.toLowerCase())
+        ];
+        
+        for (const variation of customerVariations) {
+          // Check if customer was soft-deleted via admin soft delete
+          const customerDeleted = db.prepare(
+            'SELECT deleted_at FROM quotes WHERE customer_name = ? AND deleted_at IS NOT NULL LIMIT 1'
+          ).get(variation);
           
-          // Check if this quote is soft-deleted in database
-          const { quoteNo } = parseQuoteDirName(q.name);
-          try {
-            const dbQuote = db.prepare('SELECT deleted_at FROM quotes WHERE quote_no = ? LIMIT 1').get(quoteNo);
-            // Only count if not found in DB (old quotes) or not soft-deleted
-            if (!dbQuote || !dbQuote.deleted_at) {
+          if (customerDeleted) {
+            console.log(`[DEBUG] Customer "${name}" (matched as "${variation}") was soft-deleted, hiding customer`);
+            shouldSkipCustomer = true;
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(`[DEBUG] Failed to check customer deletion status for "${name}":`, err);
+      }
+
+      // If customer is not soft-deleted, check their quotes
+      if (!shouldSkipCustomer) {
+        try {
+          const qents = await fsp.readdir(cdir, { withFileTypes: true });
+          for (const q of qents) {
+            if (!q.isDirectory()) continue;
+            totalQuoteCount++; // Count all filesystem quotes
+            
+            // Check if this quote is soft-deleted in database
+            const { quoteNo } = parseQuoteDirName(q.name);
+            try {
+              const dbQuote = db.prepare('SELECT deleted_at FROM quotes WHERE quote_no = ? LIMIT 1').get(quoteNo);
+              // Only count if not found in DB (old quotes) or not soft-deleted
+              if (!dbQuote || !dbQuote.deleted_at) {
+                quoteCount++;
+                const st = await fsp.stat(path.join(cdir, q.name));
+                if (st.mtimeMs > lastUpdated) lastUpdated = st.mtimeMs;
+              }
+            } catch {
+              // If DB query fails, count the quote (fail-safe)
               quoteCount++;
               const st = await fsp.stat(path.join(cdir, q.name));
               if (st.mtimeMs > lastUpdated) lastUpdated = st.mtimeMs;
             }
-          } catch {
-            // If DB query fails, count the quote (fail-safe)
-            quoteCount++;
-            const st = await fsp.stat(path.join(cdir, q.name));
-            if (st.mtimeMs > lastUpdated) lastUpdated = st.mtimeMs;
           }
-        }
-        // Additional check: if customer has quotes but all are soft-deleted, 
-        // check if customer was explicitly soft-deleted
-        if (totalQuoteCount > 0 && quoteCount === 0) {
-          try {
-            // Check multiple potential customer name variations to handle case sensitivity
-            const customerVariations = [
-              name,
-              name.toLowerCase(),
-              name.toUpperCase(),
-              decodeURIComponent(name),
-              decodeURIComponent(name.toLowerCase())
-            ];
-            
-            let foundDeletedQuote = false;
-            for (const variation of customerVariations) {
-              const customerDeletedQuote = db.prepare(
-                'SELECT deleted_at FROM quotes WHERE customer_name = ? AND deleted_at IS NOT NULL LIMIT 1'
-              ).get(variation);
-              
-              if (customerDeletedQuote) {
-                console.log(`[DEBUG] Customer "${name}" (matched as "${variation}") has all quotes soft-deleted, hiding customer`);
-                foundDeletedQuote = true;
-                break;
-              }
-            }
-            
-            if (foundDeletedQuote) {
-              shouldSkipCustomer = true; // Mark for skipping
-            }
-          } catch (err) {
-            console.warn(`[DEBUG] Failed to check customer deletion status for "${name}":`, err);
+          // Additional check: if customer has quotes but all are soft-deleted, hide customer
+          if (totalQuoteCount > 0 && quoteCount === 0) {
+            shouldSkipCustomer = true;
           }
-        }
-        
-      } catch { /* ignore per-customer errors */ }
+        } catch { /* ignore per-customer errors */ }
+      }
 
       // Only include customers that have active (non-deleted) quotes and aren't marked for skipping
-      if (!shouldSkipCustomer && quoteCount > 0) {
-        customers.push({ name, slug: name, quoteCount, lastUpdated });
+      if (!shouldSkipCustomer && (quoteCount > 0 || totalQuoteCount === 0)) {
+        // For customers with no quotes at all, still check if they were soft-deleted
+        if (totalQuoteCount === 0) {
+          // This is an empty customer folder - check if it should be hidden
+          // For now, show empty folders but mark them as having 0 quotes
+          customers.push({ name, slug: name, quoteCount: 0, lastUpdated: 0 });
+        } else {
+          // Customer has quotes, include them
+          customers.push({ name, slug: name, quoteCount, lastUpdated });
+        }
       }
     }
 
