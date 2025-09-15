@@ -2744,6 +2744,26 @@ export default function QuoteForm() {
               </button>
             </div>
           </div>
+
+          {/* Quick Save buttons for Step 2 */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', justifyContent: 'center' }}>
+            <button
+              style={{ ...button, padding: '6px 10px', fontSize: 13 }}
+              disabled={saving}
+              onClick={() => handleSave('Draft', { goto: 'stay' })}
+              title="Create a quote number now and come back later"
+            >
+              {saving ? 'Saving…' : 'Quick Save Draft'}
+            </button>
+            <button
+              style={{ ...primary, padding: '6px 10px', fontSize: 13 }}
+              disabled={saving}
+              onClick={() => handleSave('Finalized', { goto: 'stay' })}
+              title="Finalize & save the quote number quickly"
+            >
+              {saving ? 'Saving…' : 'Quick Finalize & Save'}
+            </button>
+          </div>
  {(ndeSuggested.length>0) && (
             <div style={{ background:'#eef7ff', border:'1px solid #b6ddff', padding:10, borderRadius:8 }}>
               <strong>Suggestion:</strong> Based on Quality and materials, consider {ndeSuggested.join(' + ')}.
