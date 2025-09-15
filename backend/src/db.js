@@ -167,17 +167,66 @@ export function migrate() {
       dims_json TEXT,
       FOREIGN KEY(family_id) REFERENCES material_families(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS preferred_vendors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      family_id INTEGER NOT NULL,
+      vendor_name TEXT NOT NULL,
+      vendor_url TEXT,
+      priority INTEGER DEFAULT 1,
+      notes TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(family_id) REFERENCES material_families(id) ON DELETE CASCADE
+    );
   `);
 
-  // Seed initial families if missing
-  try {
-    const famCount = db.prepare('SELECT COUNT(1) as cnt FROM material_families').get();
-    if (!famCount || famCount.cnt === 0) {
-      const insert = db.prepare('INSERT INTO material_families (name) VALUES (?)');
-      ['Angle','Tube','Pipe','Channel','Beam'].forEach(n => insert.run(n));
-      console.log('[DB] seeded material_families');
+      // Seed initial families if missing
+    try {
+      const famCount = db.prepare('SELECT COUNT(1) as cnt FROM material_families').get();
+      if (!famCount || famCount.cnt === 0) {
+        const insert = db.prepare('INSERT INTO material_families (name) VALUES (?)');
+        ['Angle','Tube','Pipe','Channel','Beam','Flange'].forEach(n => insert.run(n));
+        console.log('[DB] seeded material_families');
+      }
+
+      // Seed preferred vendors if missing
+      try {
+        const vendorCount = db.prepare('SELECT COUNT(1) as cnt FROM preferred_vendors').get();
+        if (!vendorCount || vendorCount.cnt === 0) {
+          const vendorInsert = db.prepare(`
+            INSERT INTO preferred_vendors (family_id, vendor_name, vendor_url, priority, notes)
+            VALUES (?, ?, ?, ?, ?)
+          `);
+
+          // Get family IDs
+          const families = db.prepare('SELECT id, name FROM material_families').all();
+          const familyMap = {};
+          families.forEach(f => familyMap[f.name.toLowerCase()] = f.id);
+
+          // Seed some preferred vendors
+          const seedVendors = [
+            { family: 'pipe', name: 'Steel Supply LP', url: 'https://www.steelsupplylp.com', priority: 1, notes: 'Excellent for carbon steel pipe' },
+            { family: 'flange', name: 'Steel Supply LP', url: 'https://www.steelsupplylp.com', priority: 1, notes: 'Wide selection of flanges' },
+            { family: 'beam', name: 'Industrial Metals Co.', url: 'https://www.industrialmetals.com', priority: 1, notes: 'Structural steel specialist' },
+            { family: 'pipe', name: 'Pipe Masters Inc.', url: 'https://www.pipemasters.com', priority: 2, notes: 'Good for specialty pipes' },
+            { family: 'flange', name: 'Alloy Flanges Co.', url: 'https://www.alloyflanges.com', priority: 2, notes: 'Specializes in alloy flanges' }
+          ];
+
+          seedVendors.forEach(vendor => {
+            const familyId = familyMap[vendor.family];
+            if (familyId) {
+              vendorInsert.run(familyId, vendor.name, vendor.url, vendor.priority, vendor.notes);
+            }
+          });
+
+          console.log('[DB] seeded preferred_vendors');
+        }
+      } catch (e) {
+        console.error('[DB] seeding error:', e);
+      }
+    } catch (e) {
+      console.warn('[DB] seed material_families failed:', e && e.message ? e.message : e);
     }
-  } catch (e) {
-    console.warn('[DB] seed material_families failed:', e && e.message ? e.message : e);
-  }
 }

@@ -1,0 +1,24 @@
+{
+  "test": "online-search-trigger",
+  "description": "Test data to trigger online material search for unmatched materials",
+  "materials": [
+    {
+      "item": "6\" SCH 40 PIPE",
+      "size": "6\"",
+      "grade": "SCH 40",
+      "quantity": 10
+    },
+    {
+      "item": "150# FLANGE",
+      "size": "6\"",
+      "grade": "150#",
+      "quantity": 2
+    },
+    {
+      "item": "BOLT SET",
+      "size": "1/2\" x 3\"",
+      "grade": "A354",
+      "quantity": 8
+    }
+  ]
+}

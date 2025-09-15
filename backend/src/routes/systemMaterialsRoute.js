@@ -153,4 +153,96 @@ router.delete('/sizes/:id', (req, res) => {
   }
 });
 
+// Get preferred vendors for a specific family
+router.get('/vendors/family/:familyId', (req, res) => {
+  try {
+    const familyId = Number(req.params.familyId);
+    const rows = db.prepare('SELECT * FROM preferred_vendors WHERE family_id = ? AND is_active = 1 ORDER BY priority, vendor_name').all(familyId) || [];
+    res.json({ ok: true, vendors: rows });
+  } catch (e) {
+    console.error('[system-materials GET /vendors/family/:familyId] ', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+router.get('/vendors', (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT pv.*, mf.name as family_name
+      FROM preferred_vendors pv
+      JOIN material_families mf ON pv.family_id = mf.id
+      ORDER BY pv.family_id, pv.priority, pv.vendor_name
+    `).all() || [];
+    res.json({ ok: true, vendors: rows });
+  } catch (e) {
+    console.error('[system-materials GET /vendors] ', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+router.post('/vendors', (req, res) => {
+  try {
+    const { family_id, vendor_name, vendor_url, priority, notes } = req.body;
+    if (!family_id || !vendor_name) {
+      return res.status(400).json({ ok: false, error: 'family_id and vendor_name are required' });
+    }
+
+    const info = db.prepare(`
+      INSERT INTO preferred_vendors (family_id, vendor_name, vendor_url, priority, notes)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(family_id, vendor_name, vendor_url || '', priority || 1, notes || '');
+
+    const vendor = db.prepare(`
+      SELECT pv.*, mf.name as family_name
+      FROM preferred_vendors pv
+      JOIN material_families mf ON pv.family_id = mf.id
+      WHERE pv.id = ?
+    `).get(info.lastInsertRowid);
+
+    res.json({ ok: true, vendor });
+  } catch (e) {
+    console.error('[system-materials POST /vendors] ', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+router.put('/vendors/:id', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { family_id, vendor_name, vendor_url, priority, notes, is_active } = req.body;
+
+    if (!family_id || !vendor_name) {
+      return res.status(400).json({ ok: false, error: 'family_id and vendor_name are required' });
+    }
+
+    db.prepare(`
+      UPDATE preferred_vendors
+      SET family_id = ?, vendor_name = ?, vendor_url = ?, priority = ?, notes = ?, is_active = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(family_id, vendor_name, vendor_url || '', priority || 1, notes || '', is_active !== undefined ? is_active : 1, id);
+
+    const vendor = db.prepare(`
+      SELECT pv.*, mf.name as family_name
+      FROM preferred_vendors pv
+      JOIN material_families mf ON pv.family_id = mf.id
+      WHERE pv.id = ?
+    `).get(id);
+
+    res.json({ ok: true, vendor });
+  } catch (e) {
+    console.error('[system-materials PUT /vendors/:id] ', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+router.delete('/vendors/:id', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    db.prepare('DELETE FROM preferred_vendors WHERE id = ?').run(id);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[system-materials DELETE /vendors/:id] ', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 export default router;

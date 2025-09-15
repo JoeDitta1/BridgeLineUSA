@@ -18,6 +18,33 @@ export default function SystemMaterials() {
   const [familyForm, setFamilyForm] = useState({ id: null, name: '' });
   const [specForm, setSpecForm] = useState({ id: null, family_id: '', grade: '', density: '', unit: '', notes: '', ai_searchable: 1 });
   const [sizeForm, setSizeForm] = useState({ id: null, family_id: '', size_label: '', dims_json: '' });
+  const [vendorForm, setVendorForm] = useState({ id: null, family_id: '', vendor_name: '', vendor_url: '', priority: 1, notes: '', is_active: 1 });
+  const [vendors, setVendors] = useState([]);
+
+  useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, []);
+
+  async function loadAll() {
+    try {
+      setBusy(true); setErr('');
+      const [fRes, sRes, zRes, vRes] = await Promise.all([
+        fetch(`${API_BASE}/api/system-materials/families`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/system-materials/specs`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/system-materials/sizes`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/system-materials/vendors`, { headers: getAuthHeaders() })
+      ]);
+      const [fJ, sJ, zJ, vJ] = await Promise.all([fRes.json(), sRes.json(), zRes.json(), vRes.json()]);
+      if (!fRes.ok) throw new Error(fJ.error || 'families load failed');
+      if (!sRes.ok) throw new Error(sJ.error || 'specs load failed');
+      if (!zRes.ok) throw new Error(zJ.error || 'sizes load failed');
+      if (!vRes.ok) throw new Error(vJ.error || 'vendors load failed');
+      setFamilies(fJ.families || []);
+      setSpecs(sJ.specs || []);
+      setSizes(zJ.sizes || []);
+      setVendors(vJ.vendors || []);
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally { setBusy(false); }
+  }
 
   useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, []);
 
@@ -114,13 +141,37 @@ export default function SystemMaterials() {
   function editSize(s) { setSizeForm({ id: s.id, family_id: s.family_id, size_label: s.size_label, dims_json: s.dims_json }); }
   async function deleteSize(id) { if (!confirm('Delete size?')) return; await fetch(`${API_BASE}/api/system-materials/sizes/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); await loadAll(); }
 
+  // Vendor actions
+  async function saveVendor(e) {
+    e?.preventDefault();
+    try {
+      setBusy(true); setErr('');
+      const method = vendorForm.id ? 'PUT' : 'POST';
+      const url = vendorForm.id ? `${API_BASE}/api/system-materials/vendors/${vendorForm.id}` : `${API_BASE}/api/system-materials/vendors`;
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify(vendorForm)
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'vendor save failed');
+      setVendorForm({ id: null, family_id: '', vendor_name: '', vendor_url: '', priority: 1, notes: '', is_active: 1 });
+      await loadAll();
+    } catch (e) { setErr(String(e?.message || e)); } finally { setBusy(false); }
+  }
+  function editVendor(v) { setVendorForm({ id: v.id, family_id: v.family_id, vendor_name: v.vendor_name, vendor_url: v.vendor_url, priority: v.priority, notes: v.notes, is_active: v.is_active }); }
+  async function deleteVendor(id) { if (!confirm('Delete vendor?')) return; await fetch(`${API_BASE}/api/system-materials/vendors/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); await loadAll(); }
+
   return (
     <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ marginBottom: 12 }}><Link to="/admin">← Back to Admin</Link></div>
       <h1>System Materials (Admin)</h1>
       {err && <div style={{ color: '#b00020' }}>{err}</div>}
-      <div style={{ display: 'flex', gap: 20, marginTop: 12 }}>
-        <div style={{ flex: 1 }}>
+      <div style={{ display: 'flex', gap: 20, marginTop: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 250 }}>
           <h3>Families</h3>
           <form onSubmit={saveFamily} style={{ marginBottom: 8 }}>
             <input value={familyForm.name} onChange={e => setFamilyForm(f => ({ ...f, name: e.target.value }))} placeholder='Family name' required />
@@ -141,7 +192,7 @@ export default function SystemMaterials() {
           </div>
         </div>
 
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 250 }}>
           <h3>Specs</h3>
           <form onSubmit={saveSpec} style={{ marginBottom: 8 }}>
             <select value={specForm.family_id} onChange={e => setSpecForm(s => ({ ...s, family_id: e.target.value }))} required>
@@ -175,7 +226,7 @@ export default function SystemMaterials() {
           </div>
         </div>
 
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 250 }}>
           <h3>Sizes</h3>
           <form onSubmit={saveSize} style={{ marginBottom: 8 }}>
             <select value={sizeForm.family_id} onChange={e => setSizeForm(s => ({ ...s, family_id: e.target.value }))} required>
@@ -198,6 +249,48 @@ export default function SystemMaterials() {
                 <div>
                   <button onClick={() => editSize(sz)} style={{ marginRight: 6 }}>Edit</button>
                   <button onClick={() => deleteSize(sz.id)} style={{ color: '#b00020' }}>Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ flex: 1, minWidth: 250 }}>
+          <h3>Preferred Vendors</h3>
+          <form onSubmit={saveVendor} style={{ marginBottom: 8 }}>
+            <select value={vendorForm.family_id} onChange={e => setVendorForm(s => ({ ...s, family_id: e.target.value }))} required>
+              <option value=''>Choose family</option>
+              {families.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+            <input value={vendorForm.vendor_name} onChange={e => setVendorForm(s => ({ ...s, vendor_name: e.target.value }))} placeholder='Vendor name' style={{ marginLeft: 8 }} required />
+            <div style={{ marginTop: 8 }}>
+              <input value={vendorForm.vendor_url} onChange={e => setVendorForm(s => ({ ...s, vendor_url: e.target.value }))} placeholder='Vendor URL (optional)' style={{ width: '100%', marginBottom: 4 }} />
+              <input type='number' value={vendorForm.priority} onChange={e => setVendorForm(s => ({ ...s, priority: Number(e.target.value) }))} placeholder='Priority (1=high)' min='1' style={{ width: 120, marginRight: 8 }} />
+              <label style={{ fontSize: 12 }}>
+                <input type='checkbox' checked={vendorForm.is_active} onChange={e => setVendorForm(s => ({ ...s, is_active: e.target.checked ? 1 : 0 }))} />
+                Active
+              </label>
+            </div>
+            <textarea value={vendorForm.notes} onChange={e => setVendorForm(s => ({ ...s, notes: e.target.value }))} placeholder='Notes (optional)' rows={2} style={{ width: '100%', marginTop: 4, marginBottom: 8 }} />
+            <div>
+              <button type='submit' disabled={busy}>{vendorForm.id ? 'Save' : 'Add Vendor'}</button>
+              {vendorForm.id && <button type='button' onClick={() => setVendorForm({ id: null, family_id: '', vendor_name: '', vendor_url: '', priority: 1, notes: '', is_active: 1 })} style={{ marginLeft: 8 }}>Clear</button>}
+            </div>
+          </form>
+          <div style={{ border: '1px solid #eee', padding: 8, borderRadius: 6 }}>
+            {vendors.map(v => (
+              <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                <div>
+                  <div style={{ fontWeight: 'bold' }}>{v.vendor_name}</div>
+                  <div style={{ fontSize: 12, color: '#666' }}>
+                    {v.family_name} • Priority: {v.priority} • {v.is_active ? 'Active' : 'Inactive'}
+                  </div>
+                  {v.vendor_url && <div style={{ fontSize: 12 }}><a href={v.vendor_url} target='_blank' rel='noopener noreferrer'>🌐 {v.vendor_url}</a></div>}
+                  {v.notes && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{v.notes}</div>}
+                </div>
+                <div>
+                  <button onClick={() => editVendor(v)} style={{ marginRight: 6 }}>Edit</button>
+                  <button onClick={() => deleteVendor(v.id)} style={{ color: '#b00020' }}>Delete</button>
                 </div>
               </div>
             ))}

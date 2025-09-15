@@ -1151,14 +1151,49 @@ async function matchAIItemWithSupabaseMaterial(aiItem) {
       }
     }
     
-    // No match found
-    console.log(`❌ No Supabase match found for "${aiItem.item}"`);
-    return { ...aiItem, matched: false, matchSource: 'none' };
+    // No match found - prepare for online search
+    console.log(`❌ No Supabase match found for "${aiItem.item}" - will search online`);
+    return {
+      ...aiItem,
+      matched: false,
+      matchSource: 'none',
+      needsOnlineSearch: true,
+      searchQuery: aiItem.item || aiItem.material || '',
+      materialType: determineMaterialType(aiItem)
+    };
     
   } catch (error) {
     console.error('Error matching AI item with Supabase:', error);
     return { ...aiItem, matched: false, matchSource: 'error', matchError: error.message };
   }
+}
+
+/**
+ * Determine material type from AI item for online search
+ */
+function determineMaterialType(aiItem) {
+  const itemDesc = (aiItem.item || aiItem.material || '').toLowerCase();
+
+  if (itemDesc.includes('pipe') || aiItem.schedule) {
+    return 'Pipe';
+  }
+  if (itemDesc.includes('flange')) {
+    return 'Flange';
+  }
+  if (itemDesc.includes('tee') || itemDesc.includes('elbow') || itemDesc.includes('coupling') || itemDesc.includes('fitting')) {
+    return 'Pipe Fitting';
+  }
+  if (itemDesc.includes('channel') || itemDesc.includes('c-channel')) {
+    return 'C-Channel';
+  }
+  if (itemDesc.includes('angle')) {
+    return 'Angle';
+  }
+  if (itemDesc.includes('plate') || itemDesc.includes('sheet')) {
+    return 'Plate';
+  }
+
+  return 'Material'; // Generic fallback
 }
 
 /* ---------------------------- AI BOM Extraction ---------------------------- */
@@ -1768,5 +1803,231 @@ router.get('/:quoteNo/revisions/:rev', async (req, res) => {
     res.status(500).json({ ok: false, error: 'Failed to fetch revision' });
   }
 });
+
+/* ---------------------------- Online Material Search ---------------------------- */
+/**
+ * POST /api/quotes/search-materials-online
+ * Searches for materials online when not found in local database
+ */
+router.post('/search-materials-online', async (req, res) => {
+  try {
+    const { query, materialType } = req.body;
+
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        error: 'Search query is required'
+      });
+    }
+
+    console.log(`🔍 Online material search for: "${query}" (type: ${materialType || 'any'})`);
+
+    // For now, return mock results
+    // In production, this would integrate with:
+    // - Google Shopping API
+    // - Amazon Product Advertising API
+    // - Industrial supplier APIs (McMaster-Carr, Grainger, etc.)
+    // - ThomasNet or other B2B directories
+
+    const mockResults = generateMockOnlineResults(query, materialType);
+
+    res.json({
+      success: true,
+      query,
+      results: mockResults,
+      source: 'online_search'
+    });
+
+  } catch (error) {
+    console.error('Online material search error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to search for materials online'
+    });
+  }
+});
+
+/**
+ * POST /api/quotes/add-material-to-database
+ * Adds a material found online to the Supabase materials database
+ */
+router.post('/add-material-to-database', async (req, res) => {
+  try {
+    const { material } = req.body;
+
+    if (!material) {
+      return res.status(400).json({
+        success: false,
+        error: 'Material data is required'
+      });
+    }
+
+    console.log(`💾 Adding material to database:`, material.name);
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return res.status(500).json({
+        success: false,
+        error: 'Supabase not configured'
+      });
+    }
+
+    // Convert online material format to Supabase materials format
+    const supabaseMaterial = {
+      type: material.type,
+      description: material.name,
+      size: material.size,
+      grade: material.grade || 'Standard',
+      price_per_unit: material.pricePerUnit || material.pricePerFt || 0,
+      unit_type: material.pricePerFt ? 'length' : 'each',
+      weight_per_ft: material.weightPerFt || 0,
+      pipe_schedule: material.schedule || null,
+      pipe_schedule_num: material.schedule ? parseInt(material.schedule.replace('SCH ', '')) : null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      source: 'online_search',
+      supplier: material.supplier || 'Online Search',
+      ai_searchable: 1
+    };
+
+    // Insert into Supabase materials table
+    const { data, error } = await supabase
+      .from('materials')
+      .insert([supabaseMaterial])
+      .select();
+
+    if (error) {
+      console.error('Error inserting material:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to add material to database'
+      });
+    }
+
+    console.log(`✅ Material added to database:`, data[0]);
+
+    res.json({
+      success: true,
+      material: data[0],
+      message: 'Material added to database successfully'
+    });
+
+  } catch (error) {
+    console.error('Add material to database error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add material to database'
+    });
+  }
+});
+
+/**
+ * Generate mock online search results
+ * In production, replace with actual API calls
+ */
+function generateMockOnlineResults(query, materialType) {
+  const queryLower = query.toLowerCase();
+
+  // Mock results for different material types
+  if (queryLower.includes('pipe') || queryLower.includes('sch')) {
+    return [
+      {
+        id: 'online_pipe_1',
+        name: 'Carbon Steel Pipe, Schedule 40',
+        description: 'ASTM A53 Grade B Carbon Steel Pipe',
+        size: '2"',
+        schedule: 'SCH 40',
+        grade: 'A53 Grade B',
+        type: 'Pipe',
+        pricePerFt: 8.50,
+        weightPerFt: 3.65,
+        supplier: 'Industrial Pipe Supply',
+        source: 'online'
+      },
+      {
+        id: 'online_pipe_2',
+        name: 'Stainless Steel Pipe, Schedule 40',
+        description: 'ASTM A312 TP304 Stainless Steel Pipe',
+        size: '2"',
+        schedule: 'SCH 40',
+        grade: '304',
+        type: 'Pipe',
+        pricePerFt: 24.75,
+        weightPerFt: 3.65,
+        supplier: 'Stainless Steel Specialists',
+        source: 'online'
+      }
+    ];
+  }
+
+  if (queryLower.includes('flange') || queryLower.includes('wn') || queryLower.includes('so')) {
+    return [
+      {
+        id: 'online_flange_1',
+        name: 'Carbon Steel Weld Neck Flange',
+        description: 'ASTM A105 Carbon Steel WN RF Flange',
+        size: '2"',
+        type: 'Flange',
+        grade: 'A105',
+        pricePerUnit: 45.00,
+        supplier: 'Flange Masters Inc.',
+        source: 'online'
+      },
+      {
+        id: 'online_flange_2',
+        name: 'Stainless Steel Slip-On Flange',
+        description: 'ASTM A182 F304 SS SO RF Flange',
+        size: '2"',
+        type: 'Flange',
+        grade: '304',
+        pricePerUnit: 67.50,
+        supplier: 'Premium Flanges Co.',
+        source: 'online'
+      }
+    ];
+  }
+
+  if (queryLower.includes('tee') || queryLower.includes('elbow') || queryLower.includes('coupling')) {
+    return [
+      {
+        id: 'online_fitting_1',
+        name: 'Carbon Steel Threaded Tee',
+        description: 'ASTM A105 Carbon Steel Threaded Tee Fitting',
+        size: '2"',
+        type: 'Pipe Fitting',
+        grade: 'A105',
+        pricePerUnit: 28.75,
+        supplier: 'Fitting Warehouse',
+        source: 'online'
+      },
+      {
+        id: 'online_fitting_2',
+        name: 'Carbon Steel 90° Elbow',
+        description: 'ASTM A234 WPB Carbon Steel 90° Elbow',
+        size: '2"',
+        type: 'Pipe Fitting',
+        grade: 'WPB',
+        pricePerUnit: 19.95,
+        supplier: 'Pipe Fittings Direct',
+        source: 'online'
+      }
+    ];
+  }
+
+  // Default fallback results
+  return [
+    {
+      id: 'online_generic_1',
+      name: `${query} - Standard Specification`,
+      description: `Standard specification for ${query}`,
+      size: 'Various',
+      type: materialType || 'Material',
+      grade: 'Standard',
+      pricePerUnit: 15.00,
+      supplier: 'Industrial Suppliers Network',
+      source: 'online'
+    }
+  ];
+}
 
 export default router;

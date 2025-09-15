@@ -4,6 +4,7 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import Select from 'react-select';
 import FileUploadPad from '../components/FileUploadPad';
 import FileViewerModal from '../components/FileViewerModal';
+import OnlineMaterialSearch from '../components/OnlineMaterialSearch';
 import * as priceHistory from '../utils/priceHistory';
 import jfetch from '../lib/jfetch';
 
@@ -548,6 +549,16 @@ export default function QuoteForm() {
   const [aiAnalysisComplete, setAiAnalysisComplete] = useState(false);
   const [aiCancelled, setAiCancelled] = useState(false);
 
+  // Online Material Search state
+  const [showOnlineSearch, setShowOnlineSearch] = useState(false);
+  const [onlineSearchQuery, setOnlineSearchQuery] = useState('');
+  const [unmatchedMaterials, setUnmatchedMaterials] = useState([]);
+
+  // Debug: Monitor state changes
+  useEffect(() => {
+    console.log(`🔄 STATE CHANGE: showOnlineSearch=${showOnlineSearch}, onlineSearchQuery="${onlineSearchQuery}"`);
+  }, [showOnlineSearch, onlineSearchQuery]);
+
   const today = new Date().toISOString().slice(0,10);
   const [meta, setMeta] = useState({
     quoteNo: pre.quoteNo || '',
@@ -836,6 +847,16 @@ export default function QuoteForm() {
     setNdeSuggested(suggest);
   }, [meta.quality, rows, nde]);
 
+  /** DEBUG: Monitor online search state changes */
+  useEffect(() => {
+    console.log('🔍 DEBUG: showOnlineSearch changed:', showOnlineSearch);
+    console.log('🔍 DEBUG: onlineSearchQuery:', onlineSearchQuery);
+    console.log('🔍 DEBUG: unmatchedMaterials length:', unmatchedMaterials.length);
+    if (showOnlineSearch) {
+      console.log('🔍 DEBUG: Online search should be visible now!');
+    }
+  }, [showOnlineSearch, onlineSearchQuery, unmatchedMaterials]);
+
   const setRow = (i, patch, recalc = true) => {
     setRows((prev) => {
       const next = prev.map((r, idx) => idx === i ? { ...r, ...patch } : r);
@@ -1058,6 +1079,7 @@ export default function QuoteForm() {
     setAiLoading(true);
     try {
       const newRows = [];
+      const unmatchedMaterialsForSearch = []; // Local array to collect materials needing online search
       
       for (let index = 0; index < selectedItems.length; index++) {
         const item = selectedItems[index];
@@ -1302,10 +1324,41 @@ export default function QuoteForm() {
             } : null
           });
           
-          // If no match found, create/add the material to database
+          // If no match found, check if this material needs online search
           if (!matchedMaterial) {
-            console.log(`📝 Creating new material in database: "${aiItemForDb.material}"`);
-            matchedMaterial = await addNewMaterialToDatabase(aiItemForDb);
+            console.log(`🌐 NO DATABASE MATCH: "${item.material}" → Online Search Required`);
+            // Mark this item for online search
+            item.needsOnlineSearch = true;
+            item.searchQuery = `${item.material || ''} ${item.size || ''} ${item.grade || ''}`.trim();
+            item.materialType = item.material?.toLowerCase().includes('flange') ? 'flange' :
+                               item.material?.toLowerCase().includes('pipe') ? 'pipe' :
+                               item.material?.toLowerCase().includes('fitting') ? 'fitting' :
+                               item.material?.toLowerCase().includes('valve') ? 'valve' : 'other';
+
+            // Collect unmatched materials for online search
+            unmatchedMaterialsForSearch.push({
+              ...item,
+              searchQuery: item.searchQuery,
+              materialType: item.materialType
+            });
+            
+            // Create a placeholder material option that indicates online search is needed
+            selectedMaterialOption = {
+              label: `${item.material || 'Unknown'} ${item.size || ''} - Online Search Required`,
+              value: `online_search_${item.material?.toLowerCase().replace(/\s+/g, '_') || 'unknown'}_${Date.now()}`,
+              family: item.material || 'Unknown',
+              type: item.material || 'Unknown',
+              category: item.material || 'Unknown',
+              size: item.size || '',
+              grade: item.grade || '',
+              description: `AI detected: ${item.material || 'Unknown Material'} - Requires online search approval`,
+              source: 'online-search-pending',
+              group: 'Online Search Required',
+              _needsOnlineSearch: true,
+              _searchQuery: item.searchQuery
+            };
+            
+            console.log(`🔍 Created placeholder for online search:`, selectedMaterialOption.label);
           }
           
           // If we got a database result, search for it in materialOptions or create a proper option
@@ -1410,7 +1463,9 @@ export default function QuoteForm() {
           width_value: item.width_value || '',   // For potential width fields
           width_unit: item.width_unit || 'in',   // For potential width fields
           qty: item.qty || 1,
-          notes: selectedMaterialOption?.source === 'ai-created' ? 
+          notes: selectedMaterialOption?.source === 'online-search-pending' ?
+            `🔍 ONLINE SEARCH REQUIRED: ${item.material || 'Material'} - Awaiting user approval (${Math.round(item._ai_confidence * 100)}% confidence)` :
+            selectedMaterialOption?.source === 'ai-created' ? 
             `AI created new material (${Math.round(item._ai_confidence * 100)}% confidence)` :
             selectedMaterialOption?.source === 'ai-fallback' ?
             `AI fallback material (${Math.round(item._ai_confidence * 100)}% confidence)` :
@@ -1581,12 +1636,117 @@ export default function QuoteForm() {
       
       // Show success message
       alert(`Successfully added ${selectedItems.length} BOM items from AI analysis!`);
-      
+
+      // Trigger online search for unmatched materials
+      if (unmatchedMaterialsForSearch.length > 0) {
+        console.log(`🌐 Online search triggered for ${unmatchedMaterialsForSearch.length} materials`);
+        setTimeout(() => {
+          triggerOnlineMaterialSearch(unmatchedMaterialsForSearch);
+        }, 1000); // Delay to allow UI to update
+      }
+
     } catch (error) {
       console.error('Error accepting AI BOM items:', error);
       alert(`Error adding BOM items: ${error.message}`);
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  /** Trigger online material search for unmatched materials */
+  const triggerOnlineMaterialSearch = (materials) => {
+    if (!materials || materials.length === 0) return;
+
+    console.log(`� Starting online search for ${materials.length} materials:`, materials.map(m => m.searchQuery));
+
+    // Start with the first material
+    const firstMaterial = materials[0];
+    setOnlineSearchQuery(firstMaterial.searchQuery);
+    setUnmatchedMaterials(materials);
+    setShowOnlineSearch(true);
+  };
+
+  /** Handle material selected from online search */
+  const handleOnlineMaterialSelected = async (selectedMaterial) => {
+    console.log('🎯 Material selected from online search:', selectedMaterial);
+
+    try {
+      // Map the selected material to the expected API format
+      const materialData = {
+        family: selectedMaterial.type || selectedMaterial.family || 'Unknown',
+        size: selectedMaterial.size || 'Unknown',
+        grade: selectedMaterial.grade || '',
+        description: selectedMaterial.description || selectedMaterial.name || '',
+        unit_type: selectedMaterial.type === 'Pipe' ? 'ft' : 'each'
+      };
+
+      // Add pricing based on material type
+      if (selectedMaterial.type === 'Pipe') {
+        materialData.price_per_ft = selectedMaterial.pricePerFt || selectedMaterial.price_per_ft || 0;
+        materialData.weight_per_ft = selectedMaterial.weightPerFt || selectedMaterial.weight_per_ft || 0;
+      } else {
+        materialData.price_per_lb = selectedMaterial.pricePerUnit ? (selectedMaterial.pricePerUnit / (selectedMaterial.weightPerFt || 1)) : 0;
+      }
+
+      // Add the material to the database
+      const response = await jfetch(`${API_BASE}/api/materials/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(materialData),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error(response.error || 'Failed to add material to database');
+      }
+
+      console.log('✅ Material added to database:', response.material);
+
+      // Refresh material options to include the new material
+      await refreshMaterialOptions();
+
+      // Remove this material from unmatched list
+      const remainingMaterials = unmatchedMaterials.slice(1);
+      setUnmatchedMaterials(remainingMaterials);
+
+      // If there are more materials, search for the next one
+      if (remainingMaterials.length > 0) {
+        const nextMaterial = remainingMaterials[0];
+        setOnlineSearchQuery(nextMaterial.searchQuery);
+      } else {
+        // All materials processed
+        setShowOnlineSearch(false);
+        setOnlineSearchQuery('');
+        setUnmatchedMaterials([]);
+        console.log('🎉 All materials processed from online search');
+        alert('All materials have been processed! The database has been updated with new materials.');
+      }
+    } catch (error) {
+      console.error('❌ Error adding material to database:', error);
+      alert(`Failed to add material to database: ${error.message}`);
+    }
+  };
+
+  /** Handle online search cancellation */
+  const handleOnlineSearchCancel = () => {
+    console.log('❌ Online material search cancelled');
+    setShowOnlineSearch(false);
+    setOnlineSearchQuery('');
+    setUnmatchedMaterials([]);
+
+    // Ask user if they want to continue with remaining materials
+    if (unmatchedMaterials.length > 1) {
+      const continueSearch = window.confirm(
+        `Search cancelled. ${unmatchedMaterials.length - 1} materials still need to be found. Continue searching?`
+      );
+      if (continueSearch) {
+        const remainingMaterials = unmatchedMaterials.slice(1);
+        setUnmatchedMaterials(remainingMaterials);
+        if (remainingMaterials.length > 0) {
+          setOnlineSearchQuery(remainingMaterials[0].searchQuery);
+          setShowOnlineSearch(true);
+        }
+      }
     }
   };
 
@@ -1713,10 +1873,11 @@ export default function QuoteForm() {
           description: exactMatch.description
         };
       } else {
-        console.log(`❌ NO EXACT MATCH for "${aiItem}"`);
+        console.log(`❌ NO EXACT MATCH for "${aiItem.material || aiItem.item}"`);
         
         // Log potential pipe matches for debugging - show what 2" pipes are available
-        if (aiItem.toLowerCase().includes('2') && aiItem.toLowerCase().includes('sch')) {
+        const materialDesc = (aiItem.material || aiItem.item || '').toLowerCase();
+        if (materialDesc.includes('2') && materialDesc.includes('sch')) {
           const twoInchPipes = allMaterials.filter(m => 
             (m.description && m.description.toLowerCase().includes('2') && m.description.toLowerCase().includes('sch')) || 
             (m.size && m.size.toLowerCase().includes('2') && m.size.toLowerCase().includes('sch'))
@@ -3744,6 +3905,14 @@ export default function QuoteForm() {
           </div>
         </div>
       )}
+
+      {showOnlineSearch && (
+        <OnlineMaterialSearch
+          materialQuery={onlineSearchQuery}
+          onMaterialSelected={handleOnlineMaterialSelected}
+          onCancel={handleOnlineSearchCancel}
+        />
+      )}
     </div>
   );
 
@@ -3928,4 +4097,3 @@ export default function QuoteForm() {
   }
 }
 // End of file
-
