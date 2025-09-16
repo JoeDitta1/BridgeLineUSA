@@ -1,5 +1,5 @@
 // src/index.js
-import 'dotenv/config';
+import './loadEnv.js';
 import express from 'express';
 import cors from 'cors';
 import session from 'express-session';
@@ -56,67 +56,20 @@ const PORT = process.env.PORT || 4000;
 app.set('trust proxy', 1);
 
 /* ------------------------------- Migrations ------------------------------- */
-db.exec?.(`
-CREATE TABLE IF NOT EXISTS quotes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  quote_no TEXT NOT NULL UNIQUE,
-  customer_name TEXT NOT NULL,
-  description TEXT,
-  requested_by TEXT,
-  estimator TEXT,
-  date TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'Draft',
-  sales_order_no TEXT,
-  rev INTEGER NOT NULL DEFAULT 0,
-  app_state TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_quotes_date ON quotes(date);
-CREATE INDEX IF NOT EXISTS idx_quotes_customer ON quotes(customer_name);
-`);
-
-function ensureColumn(table, col, typeDefault) {
-  const cols = db.prepare?.(`PRAGMA table_info(${table})`)?.all?.() ?? [];
-  const exists = cols.some(c => c.name === col);
-  if (!exists) db.exec?.(`ALTER TABLE ${table} ADD COLUMN ${col} ${typeDefault}`);
-}
-ensureColumn('quotes', 'description', 'TEXT');
-ensureColumn('quotes', 'requested_by', 'TEXT');
-ensureColumn('quotes', 'estimator', 'TEXT');
-ensureColumn('quotes', 'app_state', 'TEXT');
-ensureColumn('quotes', 'deleted_at', 'TEXT NULL');
-ensureColumn('quotes', 'rev', 'INTEGER NOT NULL DEFAULT 0');
-
-db.exec?.(`
-CREATE TABLE IF NOT EXISTS settings (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  org_prefix TEXT NOT NULL DEFAULT 'SCM',
-  system_abbr TEXT,
-  quote_series TEXT NOT NULL DEFAULT 'Q',
-  quote_pad INTEGER NOT NULL DEFAULT 4,
-  next_quote_seq INTEGER NOT NULL DEFAULT 1,
-  sales_series TEXT NOT NULL DEFAULT 'S',
-  sales_pad INTEGER NOT NULL DEFAULT 3,
-  next_sales_seq INTEGER NOT NULL DEFAULT 1
-);
-`);
-const srow = db.prepare?.('SELECT id FROM settings WHERE id=1')?.get?.();
-if (!srow) {
-  db.prepare?.(`
-    INSERT INTO settings (id, org_prefix, system_abbr, quote_series, quote_pad, next_quote_seq, sales_series, sales_pad, next_sales_seq)
-    VALUES (1, 'SCM', NULL, 'Q', 4, 1, 'S', 3, 1)
-  `)?.run?.();
-}
 
 /* -------------------------------- Middleware ------------------------------ */
 // CORS that works with Codespaces
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (e.g., curl)
+    // Allow requests with no origin (e.g., curl, postman)
     if (!origin) return callback(null, true);
 
-    // Allow any GitHub Codespaces domain
-    if (origin.includes('.app.github.dev')) {
+    // Allow any GitHub Codespaces domain (more permissive pattern)
+    if (origin && (
+      origin.includes('.app.github.dev') ||
+      origin.includes('github.dev') ||
+      origin.includes('githubusercontent.com')
+    )) {
       return callback(null, true);
     }
 
@@ -125,9 +78,18 @@ const corsOptions = {
       return callback(null, true);
     }
 
+    // Allow any origin in development (temporary fix for Codespaces)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('CORS: Allowing origin in development:', origin);
+      return callback(null, true);
+    }
+
+    console.log('CORS: Blocking origin:', origin);
     callback(new Error('Not allowed by CORS'));
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 };
 
 app.use(cors(corsOptions));

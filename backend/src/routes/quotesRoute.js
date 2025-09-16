@@ -135,13 +135,7 @@ async function extractPdfTextFromBuffer(dataBuffer) {
 // Ensure a uniqueness index to prevent creating multiple quote rows for the same
 // customer/date/description triplet in race conditions. This index is idempotent
 // and will be created if missing.
-try {
-  db.prepare(
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_customer_date_description ON quotes(customer_name, date, description)`
-  ).run();
-} catch (e) {
-  console.warn('Could not ensure unique index idx_quotes_customer_date_description:', e?.message || e);
-}
+// Moved to db.js migrate function to ensure table exists first
 
 const router = express.Router();
 

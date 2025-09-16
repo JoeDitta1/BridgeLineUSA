@@ -202,6 +202,91 @@ router.post('/logout', (req, res) => {
   });
 });
 
+// Create user endpoint (for development/testing)
+router.post('/create-user', async (req, res) => {
+  try {
+    const { email, password, role = 'oem' } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email and password are required' 
+      });
+    }
+
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true // Auto-confirm email for development
+    });
+
+    if (authError) {
+      // If user already exists, try to update their password
+      if (authError.message.includes('already registered')) {
+        const { data: updateData, error: updateError } = await supabase.auth.admin.updateUserById(
+          authData?.user?.id || (await supabase.auth.admin.listUsers()).data.users.find(u => u.email === email)?.id,
+          { password }
+        );
+        
+        if (updateError) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Failed to update user password: ' + updateError.message 
+          });
+        }
+      } else {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Failed to create user: ' + authError.message 
+        });
+      }
+    }
+
+    const userId = authData?.user?.id;
+    if (!userId) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to get user ID' 
+      });
+    }
+
+    // Create or update user profile
+    const { error: profileError } = await supabase
+      .from('user_profiles')
+      .upsert({
+        user_id: userId,
+        email,
+        role,
+        company: role === 'oem' ? 'Test Company' : 'South Coast Manufacturing',
+        full_name: email.split('@')[0].replace('.', ' '),
+        is_active: true
+      });
+
+    if (profileError) {
+      console.error('Profile creation error:', profileError);
+      // Don't fail the request if profile creation fails
+    }
+
+    res.json({
+      success: true,
+      message: 'User created/updated successfully',
+      user: {
+        id: userId,
+        email,
+        role
+      }
+    });
+
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create user' 
+    });
+  }
+});
+
 // Middleware to check JWT authentication
 const requireJWTAuth = async (req, res, next) => {
   try {

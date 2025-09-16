@@ -59,7 +59,60 @@ export function migrate() {
       updated_at INTEGER NOT NULL,
       UNIQUE(material_key, unit_type, grade, domestic)
     );
+
+    CREATE TABLE IF NOT EXISTS quotes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      quote_no TEXT NOT NULL UNIQUE,
+      customer_name TEXT NOT NULL,
+      description TEXT,
+      requested_by TEXT,
+      estimator TEXT,
+      date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Draft',
+      sales_order_no TEXT,
+      rev INTEGER NOT NULL DEFAULT 0,
+      app_state TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_quotes_date ON quotes(date);
+    CREATE INDEX IF NOT EXISTS idx_quotes_customer ON quotes(customer_name);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_customer_date_description ON quotes(customer_name, date, description);
   `);
+
+  // Ensure columns for quotes table
+  const ensureColumn = (table, col, typeDefault) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+    const exists = cols.some(c => c.name === col);
+    if (!exists) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${typeDefault}`);
+  };
+  ensureColumn('quotes', 'description', 'TEXT');
+  ensureColumn('quotes', 'requested_by', 'TEXT');
+  ensureColumn('quotes', 'estimator', 'TEXT');
+  ensureColumn('quotes', 'app_state', 'TEXT');
+  ensureColumn('quotes', 'deleted_at', 'TEXT NULL');
+  ensureColumn('quotes', 'rev', 'INTEGER NOT NULL DEFAULT 0');
+
+  // Settings table for quote numbering
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      org_prefix TEXT NOT NULL DEFAULT 'SCM',
+      system_abbr TEXT,
+      quote_series TEXT NOT NULL DEFAULT 'Q',
+      quote_pad INTEGER NOT NULL DEFAULT 4,
+      next_quote_seq INTEGER NOT NULL DEFAULT 1,
+      sales_series TEXT NOT NULL DEFAULT 'S',
+      sales_pad INTEGER NOT NULL DEFAULT 3,
+      next_sales_seq INTEGER NOT NULL DEFAULT 1
+    );
+  `);
+  const srow = db.prepare('SELECT id FROM settings WHERE id=1').get();
+  if (!srow) {
+    db.prepare(`
+      INSERT INTO settings (id, org_prefix, system_abbr, quote_series, quote_pad, next_quote_seq, sales_series, sales_pad, next_sales_seq)
+      VALUES (1, 'SCM', NULL, 'Q', 4, 1, 'S', 3, 1)
+    `).run();
+  }
 
   // Ensure admin settings KV table and counters table exist
   db.exec(`
