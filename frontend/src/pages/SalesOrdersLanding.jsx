@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+import { API_BASE } from '../api/base';
 
 export default function SalesOrdersLanding() {
   const [orders, setOrders] = useState([]);

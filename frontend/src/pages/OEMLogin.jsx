@@ -34,7 +34,7 @@ export default function MarketingSignInLanding() {
         
         if (data.authenticated) {
           if (data.user?.role === 'oem') {
-            nav('/oem/dashboard', { replace: true });
+            nav('/oem/portal', { replace: true });
           } else if (data.user?.role === 'manufacturer' || data.user?.role === 'admin') {
             nav('/dashboard', { replace: true });
           }
@@ -90,12 +90,16 @@ export default function MarketingSignInLanding() {
         }
         // Redirect based on user role
         if (data.user?.role === 'oem') {
-          const from = location.state?.from?.pathname || '/oem/dashboard';
+          const from = location.state?.from?.pathname || '/oem/portal';
           console.log('Redirecting OEM to:', from);
           nav(from, { replace: true });
-        } else if (data.user?.role === 'manufacturer' || data.user?.role === 'admin') {
+        } else if (data.user?.role === 'admin') {
           const from = location.state?.from?.pathname || '/dashboard';
-          console.log('Redirecting manufacturer/admin to:', from);
+          console.log('Redirecting admin to:', from);
+          nav(from, { replace: true });
+        } else if (data.user?.role === 'manufacturer') {
+          const from = location.state?.from?.pathname || '/dashboard';
+          console.log('Redirecting manufacturer to:', from);
           nav(from, { replace: true });
         } else {
           console.log('Invalid user role:', data.user?.role);

@@ -88,7 +88,7 @@ export default function App() {
       
       {/* OEM Portal routes */}
       <Route path="/oem/login" element={<OEMLogin />} />
-      <Route path="/oem/dashboard" element={<OEMDashboard />} />
+      <Route path="/oem/portal" element={<OEMDashboard />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to={MKT_AT_ROOT ? "/marketing" : "/"} replace />} />

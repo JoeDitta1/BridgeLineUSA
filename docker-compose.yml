@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+    volumes:
+      - ./backend/data:/app/data
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      - db
+    networks:
+      - bridgeline-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_BASE=http://localhost:4000
+    depends_on:
+      - backend
+    networks:
+      - bridgeline-network
+
+  db:
+    image: sqlite3:latest
+    volumes:
+      - ./backend/data:/data
+    networks:
+      - bridgeline-network
+
+networks:
+  bridgeline-network:
+    driver: bridge
+
+volumes:
+  db-data:
+  uploads:

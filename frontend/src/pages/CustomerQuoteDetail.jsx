@@ -1,8 +1,7 @@
 // frontend/src/pages/CustomerQuoteDetail.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-
-const API_BASE = (process.env.REACT_APP_API_BASE || 'http://localhost:4000').replace(/\/+$/, '');
+import { API_BASE } from '../api/base';
 
 export default function CustomerQuoteDetail() {
   // Route param is :customerName (keep a fallback if router supplied :slug previously)

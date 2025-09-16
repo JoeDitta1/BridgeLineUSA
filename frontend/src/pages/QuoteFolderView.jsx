@@ -3,8 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { filePathToUrl } from "../lib/fileUrls";
 import FileUploadPad from "../components/FileUploadPad";
-
-const API_BASE = (process.env.REACT_APP_API_BASE || "http://localhost:4000").replace(/\/+$/, "");
+import { API_BASE } from "../api/base";
 
 export default function QuoteFolderView() {
   const { customerName, quoteNo, section } = useParams();

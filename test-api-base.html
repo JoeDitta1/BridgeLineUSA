@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Base Test</title>
+</head>
+<body>
+    <h1>API Base Injection Test</h1>
+    <div id="result"></div>
+
+    <script>
+        // Simulate the API base injection script
+        (function () {
+            try {
+                var origin = window.location.origin;
+                console.log('Origin:', origin);
+
+                // Only rewrite in Codespaces
+                if (origin.includes('.app.github.dev') && origin.includes('-3000.')) {
+                    window.__API_BASE__ = origin.replace('-3000.', '-4000.');
+                    console.log('Set API_BASE for Codespaces:', window.__API_BASE__);
+                }
+
+                // Allow manual override via URL parameter
+                var urlParams = new URLSearchParams(window.location.search);
+                var apiBase = urlParams.get('api_base');
+                if (apiBase) {
+                    window.__API_BASE__ = apiBase;
+                    console.log('[API_BASE] Override from URL:', apiBase);
+                }
+
+                // Log once so we can confirm in the browser console
+                if (window.__API_BASE__) {
+                    console.log('[API_BASE]', window.__API_BASE__);
+                    document.getElementById('result').innerHTML = 'API Base: ' + window.__API_BASE__;
+                } else {
+                    console.log('[API_BASE] Not set, using default');
+                    document.getElementById('result').innerHTML = 'API Base: Not set (using default)';
+                }
+            } catch (e) {
+                console.warn('API base injection failed:', e);
+                document.getElementById('result').innerHTML = 'Error: ' + e.message;
+            }
+        })();
+    </script>
+</body>
+</html></content>
+<parameter name="filePath">/workspaces/BridgeLineUSA/test-api-base.html

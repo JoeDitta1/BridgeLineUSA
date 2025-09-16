@@ -1,4 +1,5 @@
 import React from 'react';
+import { API_BASE } from '../api/base';
 
 // Simple FileViewerModal component  
 export default function FileViewerModal({ open, onClose, file, quoteNo }) {
@@ -9,13 +10,7 @@ export default function FileViewerModal({ open, onClose, file, quoteNo }) {
   
   // Ensure we have a full URL by prepending the backend URL if it's a relative path
   if (fileUrl && fileUrl.startsWith('/files/')) {
-    // Get the API base URL and replace the port from 4000 to match backend
-    const currentOrigin = window.location.origin;
-    if (currentOrigin.includes('-3000.app.github.dev')) {
-      fileUrl = currentOrigin.replace('-3000.', '-4000.') + fileUrl;
-    } else {
-      fileUrl = 'http://localhost:4000' + fileUrl;
-    }
+    fileUrl = API_BASE + fileUrl;
   }
   
   console.log('FileViewerModal: Opening file:', fileName, 'URL:', fileUrl);
