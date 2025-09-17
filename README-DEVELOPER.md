@@ -1,4 +1,94 @@
-# Developer Quickstart (backup-snapshot-20250901-084830)
+# Developer Quickstart - BridgeLineUSA (Updated 2025-09-17)
+
+This file contains the complete setup to get the BridgeLineUSA application running in GitHub Codespaces or locally.
+
+## Branch to Use
+- **Main development branch**: `dev` (contains all latest fixes and Codespaces configuration)
+
+## A — Open in GitHub Codespaces (Recommended)
+
+1. Visit: https://github.com/JoeDitta1/BridgeLineUSA
+2. Click Code → Codespaces → Create codespace → choose branch `dev`
+3. Wait for the devcontainer to build (includes Node.js, npm, and port forwarding)
+
+## B — Local Development (Alternative)
+
+```bash
+git clone https://github.com/JoeDitta1/BridgeLineUSA.git
+cd BridgeLineUSA
+git checkout dev
+```
+
+## Environment Setup
+
+The repository includes all necessary environment files:
+
+- `backend/.env.local` - Backend configuration with Supabase credentials
+- `frontend/.env.local` - Frontend configuration with API base URL for Codespaces
+
+These files are already configured and committed to the `dev` branch.
+
+## Starting the Application
+
+From the workspace root in a terminal:
+
+### Backend (Port 4000)
+```bash
+cd backend
+npm install
+npm start
+```
+
+### Frontend (Port 3000)
+```bash
+cd frontend
+npm install
+npm start
+```
+
+## Accessing the Application
+
+### In GitHub Codespaces
+- **Frontend**: Use the forwarded URL for port 3000 (e.g., `https://random-3000.app.github.dev`)
+- **Backend API**: Use the forwarded URL for port 4000 (e.g., `https://random-4000.app.github.dev`)
+
+### Locally
+- **Frontend**: `http://localhost:3000`
+- **Backend API**: `http://localhost:4000`
+
+## Testing the Application
+
+1. Open the frontend URL in your browser
+2. Navigate to Quotes → Customer Quotes
+3. Click on a customer (e.g., "Joe")
+4. Click on a quote (e.g., "SCM-Q0003")
+5. The quote form should load with file display functionality working
+
+## Key Features Working
+- ✅ Quote form loading
+- ✅ File display in QuoteForm
+- ✅ Customer quote navigation
+- ✅ Supabase integration
+- ✅ Codespaces compatibility
+
+## Troubleshooting
+
+### If files don't load:
+1. Check browser console for API errors
+2. Verify the Codespace URLs are correct
+3. Ensure both backend and frontend are running
+
+### If WebSocket errors appear:
+These are from React development server and don't affect functionality.
+
+## Recent Fixes (2025-09-17)
+- Fixed Codespaces API connectivity with proper .env.local configuration
+- Resolved file display issues in QuoteForm
+- Updated .gitignore to track necessary environment files
+- Merged all backend and frontend improvements
+
+---
+**Important**: All necessary files are now committed to the `dev` branch. You can safely delete and recreate your Codespace - everything will work!
 
 This file contains a compact, copy-pasteable checklist to open the repository from the backup snapshot branch in a Codespace (recommended) or locally, rebuild the devcontainer (so port 4000 is publicly forwarded), set env vars, install deps, optionally restore a DB snapshot, and start backend + frontend.
 
