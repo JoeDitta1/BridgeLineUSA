@@ -13,9 +13,8 @@ const getLastPrice = (args) => (priceHistory.getLastPrice ? priceHistory.getLast
 const setLastPrice = (args, payload) => (priceHistory.setLastPrice ? priceHistory.setLastPrice(args, payload) : savePriceMap({ ...(loadPriceMap()), [priceKey({ family: args.category, description: args.description, unit: args.unit, grade: args.grade, domestic: args.domesticOnly })]: payload }));
 
 // IMPORTANT: point this at your backend (Node/Express) which will talk to Supabase server-side.
-// Prefer Vite-style env (import.meta.env.VITE_API_BASE) when available; fall back to CRA REACT_APP_API_BASE.
-// Leave blank in development to use the CRA dev-server proxy.
-const API_BASE = ((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) || process.env.REACT_APP_API_BASE || '');
+// Use direct backend URL to avoid proxy issues
+import { API_BASE } from '../api/base.js';
 
 /* ------------------------------- Local memory ------------------------------- */
 
@@ -129,6 +128,22 @@ const FAMILY_ALIASES = {
   'aluminum': 'Aluminum',
   'copper': 'Copper',
   'brass': 'Brass',
+  // Additional aliases that might be missing
+  'rect tube': 'HSS',
+  'rectangular tube': 'HSS',
+  'sq tube': 'HSS',
+  'square tube': 'HSS',
+  'w-beam': 'W-Beam',
+  'wide flange beam': 'W-Beam',
+  'i-beam': 'Beam',
+  'h-beam': 'Beam',
+  's-beam': 'Beam',
+  'flat bar': 'FlatBar',
+  'round bar': 'RoundBar',
+  'angle bar': 'Angle',
+  'l-angle': 'Angle',
+  'c-channel': 'Channel',
+  'u-channel': 'Channel'
 };
 
 // Normalize a family/type string to a canonical label using aliases or title-casing.
@@ -136,6 +151,12 @@ const normalizeFamily = (s) => {
   if (!s) return '';
   const k = String(s).trim().toLowerCase();
   if (!k) return '';
+  
+  // DEBUG: Log normalization for key families
+  if (k.includes('rect') || k.includes('square') || k.includes('w-beam') || k.includes('pipe')) {
+    console.log('🔍 NORMALIZING FAMILY:', { input: s, key: k, alias: FAMILY_ALIASES[k], result: FAMILY_ALIASES[k] || k.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') });
+  }
+  
   if (FAMILY_ALIASES[k]) return FAMILY_ALIASES[k];
   // Basic cleanup: collapse whitespace and title-case unknown families
   const cleaned = k.replace(/\s+/g, ' ').trim();
@@ -242,6 +263,16 @@ const toMatOption = (m) => {
   const familyRaw = m.type || m.category || m.family || '';
   const familyKey = normalizeFamily(familyRaw);
   
+  // DEBUG: Log material processing
+  if (familyRaw && (familyRaw.toLowerCase().includes('rect') || familyRaw.toLowerCase().includes('square') || familyRaw.toLowerCase().includes('w-beam'))) {
+    console.log('🔍 PROCESSING MATERIAL:', {
+      raw: familyRaw,
+      normalized: familyKey,
+      size: m.size,
+      description: m.description
+    });
+  }
+  
   // Special handling for pipes - remove schedule from display
   let displaySize = m.size || m.description || '';
   if (familyKey === 'Pipe' && displaySize) {
@@ -291,7 +322,7 @@ const toMatOption = (m) => {
 const filterOption = (option, rawInput) => {
   const input = String(rawInput || '').trim().toLowerCase();
   if (!input) return true;
-  const { label, value, keywords = [] } = option?.data || {};
+  const { label, value, keywords = [] } = option || {};
   const base = `${(label||'').toLowerCase()} ${(value||'').toLowerCase()}`;
   if (base.includes(input)) return true;
   return keywords.some(k => k.includes(input));
@@ -530,7 +561,7 @@ export default function QuoteForm() {
   // Files persisted on the server for this quote (read-only listing)
   const [serverFiles, setServerFiles] = useState([]);
   // Toggle showing uploaded files inline on the Quote form (hide by default to avoid long lists)
-  const SHOW_UPLOADED_IN_QUOTEFORM = false;
+  const SHOW_UPLOADED_IN_QUOTEFORM = true;
   // Hover preview URL (small thumbnail, 256px) to show when user hovers a file
   const [hoverPreviewUrl, setHoverPreviewUrl] = useState(null);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -694,6 +725,19 @@ export default function QuoteForm() {
         // Extract materials array from API response
         const rowsRaw = response?.materials || response || [];
         console.log('📊 Materials count:', rowsRaw?.length || 0);
+        
+        // DEBUG: Log all unique families from API response
+        const uniqueFamilies = [...new Set(rowsRaw.map(m => m.type || m.category || m.family || 'Unknown'))];
+        console.log('🔍 UNIQUE FAMILIES FROM API:', uniqueFamilies);
+        
+        // DEBUG: Log sample materials to see their structure
+        if (rowsRaw.length > 0) {
+          console.log('🔍 SAMPLE MATERIALS FROM API:', rowsRaw.slice(0, 5).map(m => ({
+            family: m.type || m.category || m.family,
+            size: m.size,
+            description: m.description
+          })));
+        }
 
         // 1) Client-generated Plate — tag as 'generic-plate'
         const genericPlateOptions = buildPlateOptions().map(o => ({
@@ -712,6 +756,18 @@ export default function QuoteForm() {
             group: 'Materials Catalog (from JSON)'
           };
         });
+        
+        // DEBUG: Log processed server options
+        console.log('🔍 PROCESSED SERVER OPTIONS:', serverOptions.slice(0, 10).map(opt => ({
+          label: opt.label,
+          family: opt.family,
+          familyKey: opt.familyKey,
+          value: opt.value
+        })));
+        
+        // DEBUG: Check for missing families
+        const processedFamilies = [...new Set(serverOptions.map(opt => opt.familyKey))];
+        console.log('🔍 PROCESSED FAMILIES:', processedFamilies);
 
         // Sort pipe materials by size (convert fractions to decimals for proper ordering)
         const sortPipesBySize = (options) => {
@@ -767,6 +823,18 @@ export default function QuoteForm() {
           { label: 'Generic Plate (Thickness Catalog)', options: genericPlateUnique },
           { label: 'Materials Catalog (from JSON)',     options: serverUnique }
         ];
+
+        // DEBUG: Log final grouped options
+        console.log('🔍 FINAL GROUPED OPTIONS:', {
+          'Generic Plate': genericPlateUnique.length,
+          'Materials Catalog': serverUnique.length,
+          total: genericPlateUnique.length + serverUnique.length
+        });
+        
+        // DEBUG: Log unique families in final options
+        const allOptions = [...genericPlateUnique, ...serverUnique];
+        const finalFamilies = [...new Set(allOptions.map(opt => opt.familyKey))];
+        console.log('🔍 FINAL UNIQUE FAMILIES:', finalFamilies);
 
         setMaterialOptions(groupedOptions);
   } catch (err) {

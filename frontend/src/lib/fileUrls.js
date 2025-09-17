@@ -1,7 +1,7 @@
 // frontend/src/lib/fileUrls.js
 // Turn an absolute filesystem path from the API into a browser URL
 // served by the backend's static /files handler.
-import { API_BASE } from '../api/base';
+import { getApiBase } from '../api/base.js';
 
 export function filePathToUrl(absPath) {
   if (!absPath) return null;
@@ -10,7 +10,9 @@ export function filePathToUrl(absPath) {
   if (i === -1) return null;
 
   const tail = absPath.slice(i + marker.length); // e.g. "Atlas/SCM-Q0015-.../Drawings/foo.pdf"
+  const base = getApiBase()
+    .replace(/\/+$/, "");                        // no trailing slash
 
   // Encode path but keep slashes
-  return `${API_BASE}/files/${encodeURIComponent(tail).replace(/%2F/g, "/")}`;
+  return `${base}/files/${encodeURIComponent(tail).replace(/%2F/g, "/")}`;
 }

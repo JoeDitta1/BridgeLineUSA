@@ -4,7 +4,7 @@
   "type": "module",
   "description": "SCM AI minimal API: materials, normalization, parts, price history",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "SUPABASE_URL=https://fypkufdjzjmjpuabasqd.supabase.co SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5cGt1ZmRqemptanB1YWJhc3FkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjYwMzYyNSwiZXhwIjoyMDcyMTc5NjI1fQ.q8S0zeFEdhV713ANtlSRitbajpOr3Bx7ZdxKDkfykDI node src/index.js",
     "dev": "node src/index.js",
     "start:clean": "./start-server.sh",
     "stop": "pkill -f 'node.*src/index.js' || lsof -ti:4000 | xargs kill -9 2>/dev/null || true",
