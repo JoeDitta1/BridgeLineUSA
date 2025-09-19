@@ -1,8 +1,26 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { API_BASE } from "../api/base";
 import "./Home.css";
 
 export default function Home() {
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('oemUser');
+      navigate('/oem/login');
+    } catch (err) {
+      console.error('Logout failed:', err);
+      navigate('/oem/login');
+    }
+  };
+
   return (
     <>
       <header className="header">
@@ -13,12 +31,41 @@ export default function Home() {
             <div className="tagline">AI-Assisted Manufacturing Platform</div>
           </div>
         </div>
-        <div className="user-section">
-          <div className="user-info">
-            <div className="user-name">Admin User</div>
-            <div className="user-role">System Administrator</div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div className="header-actions">
+            <button 
+              onClick={handleLogout}
+              className="logout-btn"
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#f3f4f6",
+                border: "1px solid #d1d5db",
+                borderRadius: "6px",
+                color: "#374151",
+                fontSize: "14px",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                marginRight: "16px"
+              }}
+              onMouseOver={(e) => {
+                e.target.style.backgroundColor = "#e5e7eb";
+                e.target.style.borderColor = "#9ca3af";
+              }}
+              onMouseOut={(e) => {
+                e.target.style.backgroundColor = "#f3f4f6";
+                e.target.style.borderColor = "#d1d5db";
+              }}
+            >
+              Logout
+            </button>
           </div>
-          <div className="user-avatar">AU</div>
+          <div className="user-section">
+            <div className="user-info">
+              <div className="user-name">Admin User</div>
+              <div className="user-role">System Administrator</div>
+            </div>
+            <div className="user-avatar">AU</div>
+          </div>
         </div>
       </header>
 

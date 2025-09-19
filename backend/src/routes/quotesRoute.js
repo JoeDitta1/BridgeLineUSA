@@ -21,7 +21,7 @@ const BACKEND_ROOT = path.resolve(__dirname, '..', '..');
 const QUOTES_FILES_ROOT = path.resolve(BACKEND_ROOT, 'data', 'quotes');
 
 // Helper function to sanitize folder names
-const safeFolderName = (input) => String(input).replace(/[\\/:*?"<>|]/g, '_').trim();
+const safeFolderName = (input) => String(input).replace(/[\\/:*?"<>|]/g, '_').trim().toUpperCase(); // Normalize to uppercase to prevent case sensitivity issues
 
 /** Extract text content from PDF files using pdfjs-dist */
 async function extractPdfText(filePath) {
@@ -212,8 +212,8 @@ function getNextQuoteNo() {
  */
 async function createCustomerQuoteFolders({ customerName, quoteNo, description }) {
   const customerSafe = safeFolderName(customerName) || 'unknown';
-  // Use same naming logic as ensureQuoteFolders: safeFolderName on both quoteNo and description
-  const baseName = `${safeFolderName(quoteNo)}-${safeFolderName(description || '')}`.replace(/-$/, '');
+  // FIXED: Use only quote number for folder name to prevent duplicate folders when description changes
+  const baseName = safeFolderName(quoteNo);
   const customerDir = path.join(VAULT_ROOT, customerSafe);
   await ensureDir(customerDir);
 
@@ -748,12 +748,13 @@ async function saveMeta(req, res) {
     let finalQuoteNo = payload.quote_no;
     if (!finalQuoteNo) {
       try {
+        // First try to find by customer+date (most recent quote for this customer on this date)
         const found = db.prepare(
-          `SELECT quote_no FROM quotes WHERE customer_name = ? AND date = ? AND (description IS NULL OR description = ? ) LIMIT 1`
-        ).get(payload.customer_name, payload.date, payload.description || null);
+          `SELECT quote_no FROM quotes WHERE customer_name = ? AND date = ? ORDER BY created_at DESC LIMIT 1`
+        ).get(payload.customer_name, payload.date);
         if (found && found.quote_no) {
           finalQuoteNo = found.quote_no;
-          console.log('[saveMeta] matched existing quote by customer+date+description:', finalQuoteNo);
+          console.log('[saveMeta] matched existing quote by customer+date:', finalQuoteNo);
         }
       } catch (e) {
         console.warn('[saveMeta] duplicate lookup failed:', e?.message || e);

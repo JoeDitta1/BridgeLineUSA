@@ -32,6 +32,13 @@ body {
 
 .logo-section { display: flex; align-items: center; gap: 1rem; }
 
+.header-actions { display: flex; align-items: center; }
+
+.logout-btn:hover {
+  background-color: #e5e7eb !important;
+  border-color: #9ca3af !important;
+}
+
 .logo {
   width: 50px; height: 50px; background: var(--primary-navy); border-radius: 50%;
   display: flex; align-items: center; justify-content: center; position: relative;

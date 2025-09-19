@@ -2634,16 +2634,22 @@ export default function QuoteForm() {
 
       let effectiveQuoteNo = (meta.quoteNo || routeQuoteNo || '').trim();
 
+      // FIXED: Only call saveQuoteAPI for basic quote creation if no quote number exists
+      // Then call saveQuoteMetaAPI which will update the existing quote (not create a duplicate)
       if (!effectiveQuoteNo) {
+        console.log('💾 Creating new quote with basic info...');
         const out = await saveQuoteAPI(buildPayloadFromMeta('Draft'));
         if (out?.quote_no) {
           effectiveQuoteNo = out.quote_no;
           setMeta(m => ({ ...m, quoteNo: effectiveQuoteNo }));
+          console.log('💾 New quote created:', effectiveQuoteNo);
         }
       }
 
+      // Always save complete form data (this will update existing quote, not create duplicate)
       const saveData = { meta: { ...meta, quoteNo: effectiveQuoteNo }, rows, nde };
       console.log('💾 SAVING COMPLETE FORM DATA:', {
+        quoteNo: effectiveQuoteNo,
         meta: Object.keys(saveData.meta).length + ' meta fields',
         rows: saveData.rows.length + ' material rows', 
         nde: saveData.nde.length + ' NDE items',

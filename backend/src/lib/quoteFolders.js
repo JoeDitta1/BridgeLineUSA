@@ -18,14 +18,16 @@ export const getQuotesRoot = () => {
 const safeFolderName = (s) =>
   String(s || '')
     .replace(/[\\/:*?"<>|]/g, '_')
-    .trim();
+    .trim()
+    .toUpperCase(); // Normalize to uppercase to prevent case sensitivity issues
 
 export { safeFolderName };
 
 export async function ensureQuoteFolders({ customerName, quoteNo, description }) {
   const ROOT = getQuotesRoot();
   const customerDir = path.join(ROOT, safeFolderName(customerName));
-  const quoteDirName = `${safeFolderName(quoteNo)}-${safeFolderName(description)}`.replace(/-$/, '');
+  // FIXED: Use only quote number for folder name to prevent duplicate folders when description changes
+  const quoteDirName = safeFolderName(quoteNo);
   const quoteDir = path.join(customerDir, quoteDirName);
 
   const toMake = [

@@ -4,6 +4,7 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import { getQuotesRoot } from '../lib/quoteFolders.js';
+import { getSupabaseClient } from '../utils/supabaseClient.js';
 import * as dbModule from '../db.js';
 
 // Ensure DB export compatibility
@@ -33,8 +34,46 @@ function parseQuoteDirName(name) {
 
 /** GET /api/quotes/customers — list customer folders with counts */
 router.get('/customers', async (_req, res) => {
-  const ROOT = getQuotesRoot();
   try {
+    console.log('[customers] Starting customer list fetch...');
+    
+    // Try Supabase first, but use local DB for accurate counts (Supabase doesn't track deleted_at)
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      console.log('[customers] Using local database for accurate quote counts (Supabase lacks deleted_at)...');
+      try {
+        // Get active quote counts from local database
+        const dbQuotes = db.prepare(`
+          SELECT customer_name, COUNT(*) as count, MAX(created_at) as last_updated 
+          FROM quotes 
+          WHERE deleted_at IS NULL 
+          GROUP BY customer_name
+          ORDER BY last_updated DESC
+        `).all();
+        
+        if (dbQuotes && dbQuotes.length > 0) {
+          console.log(`[customers] ✅ Found ${dbQuotes.length} customers with active quotes in local DB`);
+          
+          const customers = dbQuotes.map(row => ({
+            name: row.customer_name,
+            slug: row.customer_name,
+            quoteCount: row.count,
+            lastUpdated: new Date(row.last_updated).getTime() || 0
+          }));
+          
+          console.log(`[customers] ✅ Returning ${customers.length} customers from local database`);
+          return res.json({ ok: true, customers });
+        }
+      } catch (dbErr) {
+        console.log('[customers] ❌ Local database query failed:', dbErr.message);
+      }
+    } else {
+      console.log('[customers] No Supabase client available');
+    }
+    
+    // Fallback to local filesystem
+    console.log('[customers] Falling back to local filesystem...');
+    const ROOT = getQuotesRoot();
     await fsp.mkdir(ROOT, { recursive: true });
 
     const entries = await fsp.readdir(ROOT, { withFileTypes: true });
@@ -128,6 +167,7 @@ router.get('/customers', async (_req, res) => {
     }
 
     customers.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+    console.log(`[customers] ✅ Returning ${customers.length} customers from filesystem fallback`);
     res.json({ ok: true, customers });
   } catch (err) {
     console.error('GET /customers error', err);

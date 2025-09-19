@@ -1,3 +1,15 @@
+## 🛠️ Localhost API Base URL Fix
+
+If you run the frontend on `localhost:3000` and the backend on `localhost:4000`, make sure your frontend is configured to use the local backend API. Edit `frontend/.env.local` and set:
+
+```
+REACT_APP_API_BASE=http://localhost:4000
+```
+
+After editing, restart your frontend server (`npm start`).
+
+If you see CORS errors or failed login/auth requests, double-check this setting and ensure both servers are running locally.
+
 # BridgeLineUSA - Universal Access Setup
 
 This guide ensures BridgeLineUSA works from **any Codespace session from any computer**, both in browser and desktop versions.
@@ -51,11 +63,13 @@ The app automatically detects your environment:
 
 ## 🛠️ Troubleshooting
 
+
 ### CORS Issues
 If you see CORS errors:
 1. Check that the backend is running on port 4000
-2. Verify the frontend is accessing the correct API URL
-3. The CORS configuration allows all GitHub.dev domains
+2. Verify the frontend is accessing the correct API URL (see above)
+3. The backend CORS configuration allows all origins in development mode
+4. If using Codespaces URLs, make sure both frontend and backend are using compatible URLs
 
 ### Connection Refused
 If you get connection errors:

@@ -59,41 +59,9 @@ app.set('trust proxy', 1);
 
 /* -------------------------------- Middleware ------------------------------ */
 // CORS that works with Codespaces
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (e.g., curl, postman)
-    if (!origin) return callback(null, true);
-
-    // Allow any GitHub Codespaces domain (more permissive pattern)
-    if (origin && (
-      origin.includes('.app.github.dev') ||
-      origin.includes('github.dev') ||
-      origin.includes('githubusercontent.com')
-    )) {
-      return callback(null, true);
-    }
-
-    // Allow localhost for local development
-    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
-      return callback(null, true);
-    }
-
-    // Allow any origin in development (temporary fix for Codespaces)
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('CORS: Allowing origin in development:', origin);
-      return callback(null, true);
-    }
-
-    console.log('CORS: Blocking origin:', origin);
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+// Loosen CORS for development: allow all origins with credentials
+app.use(cors({ origin: true, credentials: true }));
+app.options('*', cors({ origin: true, credentials: true }));
 
 // Session middleware for authentication
 app.use(session({

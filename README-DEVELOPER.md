@@ -87,6 +87,137 @@ These are from React development server and don't affect functionality.
 - Updated .gitignore to track necessary environment files
 - Merged all backend and frontend improvements
 
+## CRITICAL FIX: Quote Duplication Issue (2025-09-19)
+
+### Problem Summary
+Users were experiencing duplicate quotes appearing in the frontend, showing the same quote number multiple times (e.g., "SCM-Q0005" and "SCM-Q0005 — QUOTE"). This was caused by multiple interconnected issues.
+
+### Root Causes & Solutions
+
+#### 1. Frontend Double API Calls ✅ FIXED
+**Problem**: The `handleSave()` function in `QuoteForm.jsx` was calling both `saveQuoteAPI()` and `saveQuoteMetaAPI()` when creating new quotes, potentially creating duplicate database records.
+
+**Solution**: Modified `frontend/src/pages/QuoteForm.jsx` line ~2636:
+```javascript
+// BEFORE (problematic)
+if (!effectiveQuoteNo) {
+  const out = await saveQuoteAPI(buildPayloadFromMeta('Draft'));
+  // ... then always calls saveQuoteMetaAPI() which might create another quote
+}
+
+// AFTER (fixed)
+if (!effectiveQuoteNo) {
+  console.log('💾 Creating new quote with basic info...');
+  const out = await saveQuoteAPI(buildPayloadFromMeta('Draft'));
+  if (out?.quote_no) {
+    effectiveQuoteNo = out.quote_no;
+    setMeta(m => ({ ...m, quoteNo: effectiveQuoteNo }));
+    console.log('💾 New quote created:', effectiveQuoteNo);
+  }
+}
+// saveQuoteMetaAPI now updates existing quote instead of creating duplicate
+```
+
+#### 2. Backend Quote Matching Logic ✅ FIXED
+**Problem**: The `saveMeta` function in `quotesRoute.js` was searching for existing quotes using `customer_name + date + description`, which failed when descriptions changed.
+
+**Solution**: Modified `backend/src/routes/quotesRoute.js` line ~750:
+```javascript
+// BEFORE (problematic)
+const found = db.prepare(
+  `SELECT quote_no FROM quotes WHERE customer_name = ? AND date = ? AND (description IS NULL OR description = ? ) LIMIT 1`
+).get(payload.customer_name, payload.date, payload.description || null);
+
+// AFTER (fixed)
+const found = db.prepare(
+  `SELECT quote_no FROM quotes WHERE customer_name = ? AND date = ? ORDER BY created_at DESC LIMIT 1`
+).get(payload.customer_name, payload.date);
+```
+
+#### 3. Folder Name Duplication ✅ FIXED
+**Problem**: Quote folders were named using both quote number and description (`SCM-Q0005-QUOTE`), creating multiple folders when descriptions changed.
+
+**Solution**: Modified `backend/src/lib/quoteFolders.js` line ~28:
+```javascript
+// BEFORE (problematic)
+const quoteDirName = `${safeFolderName(quoteNo)}-${safeFolderName(description)}`.replace(/-$/, '');
+
+// AFTER (fixed)
+const quoteDirName = safeFolderName(quoteNo); // Use only quote number
+```
+
+Also fixed in `backend/src/routes/quotesRoute.js` line ~216:
+```javascript
+// BEFORE (problematic)
+const baseName = `${safeFolderName(quoteNo)}-${safeFolderName(description || '')}`.replace(/-$/, '');
+
+// AFTER (fixed)  
+const baseName = safeFolderName(quoteNo); // Use only quote number
+```
+
+#### 4. Incorrect File Paths ✅ FIXED
+**Problem**: Backend was configured to use Linux paths (`/workspaces/BridgeLineUSA`) in Windows environment, causing API to read from wrong location.
+
+**Solution**: Updated `backend/.env.local`:
+```env
+# BEFORE (problematic)
+QUOTE_ROOT=/workspaces/BridgeLineUSA/data/quotes
+UPLOADS_DIR=/workspaces/BridgeLineUSA/backend/data/uploads
+DATABASE_URL=file:/workspaces/BridgeLineUSA/backend/data/app.db
+
+# AFTER (fixed for Windows)
+QUOTE_ROOT=C:\Users\Joe\Desktop\BridgeLineUSA\BridgeLineUSA Build in VS Code\BridgeLineUSA\backend\data\quotes
+UPLOADS_DIR=C:\Users\Joe\Desktop\BridgeLineUSA\BridgeLineUSA Build in VS Code\BridgeLineUSA\backend\data\uploads
+DATABASE_URL=file:C:\Users\Joe\Desktop\BridgeLineUSA\BridgeLineUSA Build in VS Code\BridgeLineUSA\backend\data\app.db
+```
+
+### How to Diagnose This Issue in the Future
+
+#### 1. Check for Database Duplicates
+```javascript
+// Run in backend directory
+node -e "
+const db = require('better-sqlite3')('./data/app.db');
+const quotes = db.prepare('SELECT quote_no, customer_name, description, created_at FROM quotes ORDER BY created_at DESC').all();
+console.log('Database quotes:', quotes);
+db.close();
+"
+```
+
+#### 2. Check for Folder Duplicates
+```javascript
+// Check API response
+curl "http://localhost:4000/api/quotes/customers/CUSTOMER_NAME"
+// Should show only 1 folder per quote number
+```
+
+#### 3. Verify Environment Paths
+```bash
+# Check backend startup logs
+npm run dev
+# Should show correct Windows paths like:
+# Quote folders: C:\Users\...\backend\data\quotes
+# NOT: /workspaces/BridgeLineUSA/data/quotes
+```
+
+### Prevention
+- Always use quote number only for folder names (no description)
+- Ensure environment variables use correct OS paths  
+- Test create → save → create flow to ensure no duplicates
+- Check both database and filesystem for consistency
+
+### Files Modified
+- `frontend/src/pages/QuoteForm.jsx` (handleSave function)
+- `backend/src/routes/quotesRoute.js` (saveMeta function, createCustomerQuoteFolders function)
+- `backend/src/lib/quoteFolders.js` (ensureQuoteFolders function) 
+- `backend/.env.local` (file paths)
+
+### Test Case
+Create a new quote, change its description, save again. Should result in:
+- ✅ 1 database record
+- ✅ 1 folder named with quote number only
+- ✅ 1 entry in customer quotes API
+
 ---
 **Important**: All necessary files are now committed to the `dev` branch. You can safely delete and recreate your Codespace - everything will work!
 
