@@ -1527,7 +1527,7 @@ JSON array only:`;
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              model: 'gpt-4o',  // Use full GPT-4o for better accuracy than mini
+              model: 'gpt-4o-mini',  // Use gpt-4o-mini for faster, more reliable responses
               messages: [
                 {
                   role: 'system',
@@ -1542,9 +1542,9 @@ JSON array only:`;
               temperature: 0.0  // Zero temperature for maximum precision and consistency
             })
           }),
-          // 30 second timeout for enhanced AI analysis
+          // 60 second timeout for enhanced AI analysis (increased from 30s)
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('OpenAI API timeout')), 30000)
+            setTimeout(() => reject(new Error('OpenAI API timeout')), 60000)
           )
         ]);
 
