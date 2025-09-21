@@ -28,6 +28,8 @@ import SoftDeleteManager from "./pages/admin/SoftDeleteManager";
 import Backups from "./pages/admin/Backups";
 // OEM pages
 import OEMDashboard from "./pages/oem/OEMDashboard";
+// Quality Management
+import Quality from "./pages/Quality";
 
 const MKT_AT_ROOT = process.env.REACT_APP_MARKETING_AT_ROOT === "true";
 
@@ -78,7 +80,8 @@ export default function App() {
   {/* End Sales Orders */}
       <Route path="/production" element={<Stub title="Production" />} />
       <Route path="/customers"  element={<Stub title="Customers" />} />
-      <Route path="/quality"    element={<Stub title="Quality" />} />
+      <Route path="/quality"    element={<Quality />} />
+      <Route path="/quality/*"  element={<Quality />} />
       <Route path="/shipping"   element={<Stub title="Shipping" />} />
       <Route path="/equipment"  element={<Stub title="Equipment" />} />
 

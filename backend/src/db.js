@@ -128,6 +128,46 @@ export function migrate() {
     );
   `);
 
+  // QuickBooks Integration Settings (separate from other settings)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS qb_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      enabled INTEGER DEFAULT 0,
+      connection_type TEXT DEFAULT 'desktop',
+      company_file_path TEXT,
+      qb_app_path TEXT,
+      connection_mode TEXT DEFAULT 'single_user',
+      username TEXT,
+      password TEXT,
+      company_id TEXT,
+      client_id TEXT,
+      client_secret TEXT,
+      access_token TEXT,
+      is_sandbox INTEGER DEFAULT 1,
+      search_item_types TEXT DEFAULT 'inventory,non_inventory,service',
+      search_fields TEXT DEFAULT 'name,description,manufacturer_part_number',
+      preferred_vendors TEXT,
+      connection_timeout INTEGER DEFAULT 30,
+      search_limit INTEGER DEFAULT 50,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Initialize default QB settings if not exists
+  const qbRow = db.prepare('SELECT id FROM qb_settings WHERE id=1').get();
+  if (!qbRow) {
+    db.prepare(`
+      INSERT INTO qb_settings (
+        id, enabled, connection_type, connection_mode, is_sandbox,
+        search_item_types, search_fields, connection_timeout, search_limit
+      ) VALUES (
+        1, 0, 'desktop', 'single_user', 1,
+        'inventory,non_inventory,service', 'name,description,manufacturer_part_number', 30, 50
+      )
+    `).run();
+  }
+
   // NEW: equipment tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS equipment (
