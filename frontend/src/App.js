@@ -14,6 +14,7 @@ import QuoteFolderView from "./pages/QuoteFolderView"; // NEW
 import SalesOrdersLog from "./pages/SalesOrdersLog";
 import WorkOrderForm from "./pages/WorkOrderForm";
 import ProductionRouter from "./pages/ProductionRouter";
+import Quality from "./pages/Quality";
 
 // Public site / auth
 import Marketing from "./pages/Marketing"; // make sure this file exists
@@ -78,7 +79,7 @@ export default function App() {
   {/* End Sales Orders */}
       <Route path="/production" element={<Stub title="Production" />} />
       <Route path="/customers"  element={<Stub title="Customers" />} />
-      <Route path="/quality"    element={<Stub title="Quality" />} />
+      <Route path="/quality"    element={<Quality />} />
       <Route path="/shipping"   element={<Stub title="Shipping" />} />
       <Route path="/equipment"  element={<Stub title="Equipment" />} />
 
