@@ -592,3 +592,279 @@ router.get('/status/:jobId', (req, res) => {
 });
 
 export default router;
+
+// Desktop backup routes for VS Code desktop environments
+router.post('/run-desktop', requireJWTAuth, (req, res) => {
+  try {
+    if (hasActiveJob()) {
+      return res.status(409).json({ 
+        success: false, 
+        error: 'Another backup job is already running' 
+      });
+    }
+
+    ensureDesktopArchiveDir();
+    cleanupOldJobs();
+    
+    const jobId = randomUUID();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const branchName = `desktop-backup-${timestamp}`;
+    
+    // Desktop-compatible paths and commands
+    const isWindows = process.platform === 'win32';
+    const projectRoot = process.cwd();
+    const archiveDir = path.join(projectRoot, '_archives_desktop');
+    const bundlePath = path.join(archiveDir, `${branchName}.bundle`);
+    const zipPath = path.join(archiveDir, `${branchName}.zip`);
+    
+    const job = {
+      logs: [],
+      status: 'running',
+      startTime: Date.now(),
+      metadata: { branchName, bundlePath, zipPath, projectRoot, isWindows }
+    };
+    
+    jobs.set(jobId, job);
+    
+    // Desktop backup script - works on Windows, Mac, Linux
+    const backupScript = createDesktopBackupScript(job.metadata);
+    
+    res.json({ success: true, jobId, branchName });
+    
+    executeDesktopBackup(jobId, backupScript);
+    
+  } catch (error) {
+    console.error('Desktop backup error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Desktop GitHub push route
+router.post('/push-github-desktop', requireJWTAuth, (req, res) => {
+  try {
+    if (hasActiveJob()) {
+      return res.status(409).json({ 
+        success: false, 
+        error: 'Another backup job is already running' 
+      });
+    }
+
+    const jobId = randomUUID();
+    const isWindows = process.platform === 'win32';
+    const projectRoot = process.cwd();
+    
+    const job = {
+      logs: [],
+      status: 'running',
+      startTime: Date.now(),
+      metadata: { projectRoot, isWindows, type: 'github-push' }
+    };
+    
+    jobs.set(jobId, job);
+    
+    res.json({ success: true, jobId });
+    
+    executeDesktopGitHubPush(jobId);
+    
+  } catch (error) {
+    console.error('Desktop GitHub push error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Desktop archive directory
+function ensureDesktopArchiveDir() {
+  const archiveDir = path.join(process.cwd(), '_archives_desktop');
+  if (!fs.existsSync(archiveDir)) {
+    fs.mkdirSync(archiveDir, { recursive: true });
+  }
+}
+
+// Create desktop-compatible backup script
+function createDesktopBackupScript({ branchName, bundlePath, zipPath, projectRoot, isWindows }) {
+  const commands = [];
+  
+  if (isWindows) {
+    // Windows PowerShell commands
+    commands.push(
+      `echo "Starting desktop backup for ${branchName}"`,
+      `cd "${projectRoot}"`,
+      'echo "Creating backup branch..."',
+      `git checkout -b ${branchName}`,
+      'echo "Adding all files..."',
+      'git add -A',
+      `git commit -m "Desktop backup ${new Date().toISOString()}"`,
+      'echo "Creating Git bundle..."',
+      `git bundle create "${bundlePath}" HEAD`,
+      'echo "Creating ZIP archive..."',
+      `powershell "Compress-Archive -Path '${projectRoot}\\*' -DestinationPath '${zipPath}' -Force"`,
+      'echo "Switching back to original branch..."',
+      'git checkout -',
+      `echo "Backup completed: ${branchName}"`
+    );
+  } else {
+    // Linux/Mac bash commands
+    commands.push(
+      `echo "Starting desktop backup for ${branchName}"`,
+      `cd "${projectRoot}"`,
+      'echo "Creating backup branch..."',
+      `git checkout -b ${branchName}`,
+      'echo "Adding all files..."',
+      'git add -A',
+      `git commit -m "Desktop backup $(date -Iseconds)"`,
+      'echo "Creating Git bundle..."',
+      `git bundle create "${bundlePath}" HEAD`,
+      'echo "Creating ZIP archive..."',
+      `zip -r "${zipPath}" . -x "node_modules/*" ".git/*" "_archives*/*"`,
+      'echo "Switching back to original branch..."',
+      'git checkout -',
+      `echo "Backup completed: ${branchName}"`
+    );
+  }
+  
+  return commands;
+}
+
+// Execute desktop backup
+function executeDesktopBackup(jobId, commands) {
+  const job = jobs.get(jobId);
+  if (!job) return;
+  
+  const { isWindows } = job.metadata;
+  const shell = isWindows ? 'powershell.exe' : '/bin/bash';
+  const shellFlag = isWindows ? '-Command' : '-c';
+  
+  let currentCommand = 0;
+  
+  function runNextCommand() {
+    if (currentCommand >= commands.length) {
+      job.status = 'completed';
+      addJobLog(jobId, '✅ Desktop backup completed successfully!');
+      return;
+    }
+    
+    const command = commands[currentCommand++];
+    addJobLog(jobId, `> ${command}`);
+    
+    const process = spawn(shell, [shellFlag, command], {
+      cwd: job.metadata.projectRoot,
+      stdio: 'pipe'
+    });
+    
+    process.stdout.on('data', (data) => {
+      addJobLog(jobId, data.toString().trim());
+    });
+    
+    process.stderr.on('data', (data) => {
+      addJobLog(jobId, `ERROR: ${data.toString().trim()}`);
+    });
+    
+    process.on('close', (code) => {
+      if (code === 0) {
+        runNextCommand();
+      } else {
+        job.status = 'failed';
+        addJobLog(jobId, `❌ Command failed with exit code ${code}`);
+      }
+    });
+    
+    process.on('error', (error) => {
+      job.status = 'failed';
+      addJobLog(jobId, `❌ Process error: ${error.message}`);
+    });
+  }
+  
+  runNextCommand();
+}
+
+// Execute desktop GitHub push
+function executeDesktopGitHubPush(jobId) {
+  const job = jobs.get(jobId);
+  if (!job) return;
+  
+  const { isWindows, projectRoot } = job.metadata;
+  const shell = isWindows ? 'powershell.exe' : '/bin/bash';
+  const shellFlag = isWindows ? '-Command' : '-c';
+  
+  const commands = [
+    'echo "Starting GitHub push..."',
+    `cd "${projectRoot}"`,
+    'echo "Getting current branch..."',
+    'git branch --show-current',
+    'echo "Adding all changes..."',
+    'git add -A',
+    'echo "Committing changes..."',
+    `git commit -m "Desktop changes $(date)"`,
+    'echo "Pushing to GitHub..."',
+    'git push origin HEAD',
+    'echo "Push completed!"'
+  ];
+  
+  let currentCommand = 0;
+  
+  function runNextCommand() {
+    if (currentCommand >= commands.length) {
+      job.status = 'completed';
+      addJobLog(jobId, '✅ GitHub push completed successfully!');
+      return;
+    }
+    
+    const command = commands[currentCommand++];
+    addJobLog(jobId, `> ${command}`);
+    
+    const process = spawn(shell, [shellFlag, command], {
+      cwd: projectRoot,
+      stdio: 'pipe'
+    });
+    
+    process.stdout.on('data', (data) => {
+      addJobLog(jobId, data.toString().trim());
+    });
+    
+    process.stderr.on('data', (data) => {
+      const output = data.toString().trim();
+      // Git sometimes sends normal output to stderr
+      if (output.includes('Pushing to') || output.includes('Writing objects')) {
+        addJobLog(jobId, output);
+      } else {
+        addJobLog(jobId, `STDERR: ${output}`);
+      }
+    });
+    
+    process.on('close', (code) => {
+      if (code === 0) {
+        runNextCommand();
+      } else {
+        job.status = 'failed';
+        addJobLog(jobId, `❌ Command failed with exit code ${code}`);
+      }
+    });
+    
+    process.on('error', (error) => {
+      job.status = 'failed';
+      addJobLog(jobId, `❌ Process error: ${error.message}`);
+    });
+  }
+  
+  runNextCommand();
+}
+
+// Helper function to add logs to a job
+function addJobLog(jobId, message) {
+  const job = jobs.get(jobId);
+  if (!job) return;
+  
+  const logEntry = `[${new Date().toISOString()}] ${message}`;
+  job.logs.push(logEntry);
+  
+  // Keep only last MAX_LOG_LINES
+  if (job.logs.length > MAX_LOG_LINES) {
+    job.logs = job.logs.slice(-MAX_LOG_LINES);
+  }
+}

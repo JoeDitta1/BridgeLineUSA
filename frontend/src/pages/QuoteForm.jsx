@@ -1392,6 +1392,13 @@ export default function QuoteForm() {
             } : null
           });
           
+          // DEBUG: Log what findBestMaterialMatch returned
+          console.log(`🐛 DEBUG - Material match result for "${item.material}":`, {
+            searchedFor: { material: item.material, size: item.size, grade: item.grade },
+            foundMatch: !!matchedMaterial,
+            matchDetails: matchedMaterial
+          });
+          
           // If no match found, check if this material needs online search
           if (!matchedMaterial) {
             console.log(`🌐 NO DATABASE MATCH: "${item.material}" → Online Search Required`);
@@ -1704,6 +1711,16 @@ export default function QuoteForm() {
       
       // Show success message
       alert(`Successfully added ${selectedItems.length} BOM items from AI analysis!`);
+
+      // DEBUG: Log unmatched materials collection
+      console.log(`🐛 DEBUG - Unmatched materials for search:`, {
+        totalProcessed: selectedItems.length,
+        unmatchedCount: unmatchedMaterialsForSearch.length,
+        unmatchedMaterials: unmatchedMaterialsForSearch.map(m => ({ 
+          material: m.material, 
+          searchQuery: m.searchQuery 
+        }))
+      });
 
       // Trigger online search for unmatched materials
       if (unmatchedMaterialsForSearch.length > 0) {

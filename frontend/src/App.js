@@ -79,7 +79,7 @@ export default function App() {
   {/* End Sales Orders */}
       <Route path="/production" element={<Stub title="Production" />} />
       <Route path="/customers"  element={<Stub title="Customers" />} />
-      <Route path="/quality"    element={<Quality />} />
+      <Route path="/quality/*"    element={<Quality />} />
       <Route path="/shipping"   element={<Stub title="Shipping" />} />
       <Route path="/equipment"  element={<Stub title="Equipment" />} />
 

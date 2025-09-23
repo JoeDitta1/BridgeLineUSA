@@ -7,12 +7,21 @@ function getAuthHeaders() {
 }
 
 const Backups = () => {
+  // Browser Version State
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState([]);
   const [result, setResult] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [pushResult, setPushResult] = useState(null);
+
+  // Desktop Version State
+  const [isRunningDesktop, setIsRunningDesktop] = useState(false);
+  const [logsDesktop, setLogsDesktop] = useState([]);
+  const [resultDesktop, setResultDesktop] = useState(null);
+  const [showModalDesktop, setShowModalDesktop] = useState(false);
+  const [isPushingDesktop, setIsPushingDesktop] = useState(false);
+  const [pushResultDesktop, setPushResultDesktop] = useState(null);
 
   const runBackup = async () => {
     if (isRunning) return;
@@ -134,6 +143,127 @@ const Backups = () => {
     }
   };
 
+  // Desktop Backup Functions
+  const runDesktopBackup = async () => {
+    if (isRunningDesktop) return;
+    
+    setIsRunningDesktop(true);
+    setLogsDesktop([]);
+    setResultDesktop(null);
+    setShowModalDesktop(true);
+    
+    try {
+      // Start the desktop backup job
+      const response = await fetch('/api/backups/run-desktop', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to start desktop backup');
+      }
+      
+      const { jobId } = await response.json();
+      
+      // Stream progress via SSE
+      const eventSource = new EventSource(`/api/backups/stream-desktop?jobId=${jobId}`);
+      
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        setLogsDesktop(prev => [...prev, data]);
+        
+        if (data.status === 'done') {
+          setResultDesktop({
+            success: true,
+            branch: data.branch,
+            bundle: data.bundle,
+            zip: data.zip,
+            message: data.message
+          });
+          setIsRunningDesktop(false);
+          eventSource.close();
+        } else if (data.status === 'error') {
+          setResultDesktop({
+            success: false,
+            message: data.message,
+            step: data.step
+          });
+          setIsRunningDesktop(false);
+          eventSource.close();
+        }
+      };
+      
+      eventSource.onerror = (error) => {
+        console.error('Desktop SSE error:', error);
+        setResultDesktop({
+          success: false,
+          message: 'Connection to desktop backup stream lost'
+        });
+        setIsRunningDesktop(false);
+        eventSource.close();
+      };
+      
+    } catch (error) {
+      console.error('Desktop backup error:', error);
+      setResultDesktop({
+        success: false,
+        message: error.message
+      });
+      setIsRunningDesktop(false);
+    }
+  };
+
+  const closeDesktopModal = () => {
+    setShowModalDesktop(false);
+    setLogsDesktop([]);
+    setResultDesktop(null);
+  };
+
+  const pushToGitHubDesktop = async () => {
+    if (isPushingDesktop) return;
+    
+    setIsPushingDesktop(true);
+    setPushResultDesktop(null);
+    
+    try {
+      const response = await fetch('/api/backups/push-github-desktop', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setPushResultDesktop({
+          success: true,
+          message: data.message,
+          branch: data.branch,
+          commits: data.commits
+        });
+      } else {
+        setPushResultDesktop({
+          success: false,
+          message: data.error || 'Failed to push to GitHub from desktop'
+        });
+      }
+    } catch (error) {
+      console.error('Desktop GitHub push error:', error);
+      setPushResultDesktop({
+        success: false,
+        message: error.message
+      });
+    } finally {
+      setIsPushingDesktop(false);
+    }
+  };
+
   const downloadFile = (url, filename) => {
     const link = document.createElement('a');
     link.href = url;
@@ -160,117 +290,252 @@ const Backups = () => {
         <h1>System Backup</h1>
         <p style={{ color: "#666", marginBottom: 20 }}>Create a complete backup of the system including code, data, and user uploads.</p>
         
-      <div style={{ background: "#f9fafb", padding: 20, borderRadius: 8 }}>
-        <div style={{ marginBottom: 16 }}>
-          <h2 style={{ marginTop: 0, marginBottom: 8 }}>Create Backup</h2>
-          <p style={{ color: "#666", marginBottom: 12 }}>
-            Create a complete backup of the system including code, data, and user uploads. 
-            The backup will create a new Git branch and generate both a Git bundle and ZIP archive.
-          </p>
-          <p style={{ fontSize: 14, color: "#1976d2", marginBottom: 16 }}>
-            ✅ <strong>Safe Operation:</strong> Your working branch will be preserved and unchanged.
-          </p>
-        </div>
+        {/* Dual Backup Sections */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+          
+          {/* VS Code Browser Version */}
+          <div style={{ background: "#f9fafb", padding: 20, borderRadius: 8, border: "2px solid #e0e0e0" }}>
+            <div style={{ marginBottom: 16 }}>
+              <h2 style={{ marginTop: 0, marginBottom: 8, color: "#1976d2" }}>VS Code Browser Version</h2>
+              <p style={{ color: "#666", marginBottom: 12, fontSize: 14 }}>
+                For GitHub Codespaces and browser-based development environments.
+                Uses Codespaces-specific paths and Linux commands.
+              </p>
+              <p style={{ fontSize: 12, color: "#f57c00", marginBottom: 16 }}>
+                ⚠️ <strong>Codespaces Only:</strong> Will not work on desktop VS Code.
+              </p>
+            </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
-          <button 
-            onClick={runBackup}
-            disabled={isRunning}
-            style={{ 
-              padding: "10px 20px", 
-              background: isRunning ? "#ccc" : "#1976d2", 
-              color: "white", 
-              border: "none", 
-              borderRadius: 6,
-              cursor: isRunning ? "not-allowed" : "pointer",
-              opacity: isRunning ? 0.6 : 1,
-              fontWeight: 500
-            }}
-          >
-            {isRunning ? 'Creating Backup...' : 'Create Backup'}
-          </button>
-          
-          <button 
-            onClick={pushToGitHub}
-            disabled={isPushing || isRunning}
-            style={{ 
-              padding: "10px 20px", 
-              background: isPushing ? "#ccc" : "#4caf50", 
-              color: "white", 
-              border: "none", 
-              borderRadius: 6,
-              cursor: (isPushing || isRunning) ? "not-allowed" : "pointer",
-              opacity: (isPushing || isRunning) ? 0.6 : 1,
-              fontWeight: 500
-            }}
-          >
-            {isPushing ? 'Pushing...' : 'Push to GitHub'}
-          </button>
-          
-          {isRunning && (
-            <div style={{ display: "flex", alignItems: "center", color: "#666" }}>
-              <div style={{ 
-                display: "inline-block",
-                width: 16, 
-                height: 16, 
-                border: "2px solid #f3f3f3",
-                borderTop: "2px solid #1976d2",
-                borderRadius: "50%",
-                animation: "spin 1s linear infinite",
-                marginRight: 8
-              }}></div>
-              Backup in progress...
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+              <button 
+                onClick={runBackup}
+                disabled={isRunning || isRunningDesktop}
+                style={{ 
+                  padding: "8px 16px", 
+                  background: isRunning ? "#ccc" : "#1976d2", 
+                  color: "white", 
+                  border: "none", 
+                  borderRadius: 6,
+                  cursor: isRunning ? "not-allowed" : "pointer",
+                  opacity: isRunning ? 0.6 : 1,
+                  fontWeight: 500,
+                  fontSize: 14
+                }}
+              >
+                {isRunning ? 'Creating...' : 'Create Browser Backup'}
+              </button>
+              
+              <button 
+                onClick={pushToGitHub}
+                disabled={isPushing || isRunning || isPushingDesktop || isRunningDesktop}
+                style={{ 
+                  padding: "8px 16px", 
+                  background: isPushing ? "#ccc" : "#4caf50", 
+                  color: "white", 
+                  border: "none", 
+                  borderRadius: 6,
+                  cursor: isPushing ? "not-allowed" : "pointer",
+                  opacity: isPushing ? 0.6 : 1,
+                  fontWeight: 500,
+                  fontSize: 14
+                }}
+              >
+                {isPushing ? 'Pushing...' : 'Push to GitHub (Browser)'}
+              </button>
             </div>
-          )}
-          
-          {isPushing && (
-            <div style={{ display: "flex", alignItems: "center", color: "#666" }}>
-              <div style={{ 
-                display: "inline-block",
-                width: 16, 
-                height: 16, 
-                border: "2px solid #f3f3f3",
-                borderTop: "2px solid #4caf50",
-                borderRadius: "50%",
-                animation: "spin 1s linear infinite",
-                marginRight: 8
-              }}></div>
-              Pushing to GitHub...
-            </div>
-          )}
-        </div>
 
-        {/* GitHub Push Result */}
-        {pushResult && (
-          <div style={{ 
-            marginBottom: 16,
-            padding: 12,
-            borderRadius: 6,
-            background: pushResult.success ? "#e8f5e8" : "#fee",
-            border: `1px solid ${pushResult.success ? "#4caf50" : "#f44336"}`
-          }}>
-            <div style={{ 
-              fontWeight: 600, 
-              color: pushResult.success ? "#2e7d32" : "#d32f2f",
-              marginBottom: 4
-            }}>
-              {pushResult.success ? '✅ GitHub Push Successful!' : '❌ GitHub Push Failed'}
-            </div>
-            <div style={{ 
-              fontSize: 14, 
-              color: pushResult.success ? "#2e7d32" : "#d32f2f"
-            }}>
-              {pushResult.message}
-            </div>
-            {pushResult.success && pushResult.commits && (
-              <div style={{ 
-                fontSize: 12, 
-                color: "#666", 
-                marginTop: 4
-              }}>
-                Branch: {pushResult.branch} • Commits pushed: {pushResult.commits}
+            {/* Browser Status Indicators */}
+            {isRunning && (
+              <div style={{ display: "flex", alignItems: "center", color: "#666", fontSize: 12 }}>
+                <div style={{ 
+                  display: "inline-block", width: 12, height: 12, 
+                  border: "2px solid #f3f3f3", borderTop: "2px solid #1976d2",
+                  borderRadius: "50%", animation: "spin 1s linear infinite", marginRight: 6
+                }}></div>
+                Browser backup in progress...
               </div>
             )}
+            
+            {isPushing && (
+              <div style={{ display: "flex", alignItems: "center", color: "#666", fontSize: 12 }}>
+                <div style={{ 
+                  display: "inline-block", width: 12, height: 12,
+                  border: "2px solid #f3f3f3", borderTop: "2px solid #4caf50",
+                  borderRadius: "50%", animation: "spin 1s linear infinite", marginRight: 6
+                }}></div>
+                Pushing from browser environment...
+              </div>
+            )}
+
+            {/* Browser GitHub Push Result */}
+            {pushResult && (
+              <div style={{ 
+                marginTop: 12, padding: 10, borderRadius: 4, fontSize: 12,
+                background: pushResult.success ? "#e8f5e8" : "#fee",
+                border: `1px solid ${pushResult.success ? "#4caf50" : "#f44336"}`
+              }}>
+                <div style={{ fontWeight: 600, color: pushResult.success ? "#2e7d32" : "#d32f2f" }}>
+                  {pushResult.success ? '✅ Browser Push Successful!' : '❌ Browser Push Failed'}
+                </div>
+                <div style={{ color: pushResult.success ? "#2e7d32" : "#d32f2f", marginTop: 2 }}>
+                  {pushResult.message}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* VS Code Desktop Version */}
+          <div style={{ background: "#f0f8ff", padding: 20, borderRadius: 8, border: "2px solid #2196f3" }}>
+            <div style={{ marginBottom: 16 }}>
+              <h2 style={{ marginTop: 0, marginBottom: 8, color: "#2196f3" }}>VS Code Desktop Version</h2>
+              <p style={{ color: "#666", marginBottom: 12, fontSize: 14 }}>
+                For local desktop development on Windows, Mac, or Linux.
+                Uses your actual desktop folder paths and system commands.
+              </p>
+              <p style={{ fontSize: 12, color: "#4caf50", marginBottom: 16 }}>
+                ✅ <strong>Desktop Ready:</strong> Works with your local VS Code environment.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+              <button 
+                onClick={runDesktopBackup}
+                disabled={isRunningDesktop || isRunning}
+                style={{ 
+                  padding: "8px 16px", 
+                  background: isRunningDesktop ? "#ccc" : "#2196f3", 
+                  color: "white", 
+                  border: "none", 
+                  borderRadius: 6,
+                  cursor: isRunningDesktop ? "not-allowed" : "pointer",
+                  opacity: isRunningDesktop ? 0.6 : 1,
+                  fontWeight: 500,
+                  fontSize: 14
+                }}
+              >
+                {isRunningDesktop ? 'Creating...' : 'Create Desktop Backup'}
+              </button>
+              
+              <button 
+                onClick={pushToGitHubDesktop}
+                disabled={isPushingDesktop || isRunningDesktop || isPushing || isRunning}
+                style={{ 
+                  padding: "8px 16px", 
+                  background: isPushingDesktop ? "#ccc" : "#4caf50", 
+                  color: "white", 
+                  border: "none", 
+                  borderRadius: 6,
+                  cursor: isPushingDesktop ? "not-allowed" : "pointer",
+                  opacity: isPushingDesktop ? 0.6 : 1,
+                  fontWeight: 500,
+                  fontSize: 14
+                }}
+              >
+                {isPushingDesktop ? 'Pushing...' : 'Push to GitHub (Desktop)'}
+              </button>
+            </div>
+
+            {/* Desktop Status Indicators */}
+            {isRunningDesktop && (
+              <div style={{ display: "flex", alignItems: "center", color: "#666", fontSize: 12 }}>
+                <div style={{ 
+                  display: "inline-block", width: 12, height: 12,
+                  border: "2px solid #f3f3f3", borderTop: "2px solid #2196f3",
+                  borderRadius: "50%", animation: "spin 1s linear infinite", marginRight: 6
+                }}></div>
+                Desktop backup in progress...
+              </div>
+            )}
+            
+            {isPushingDesktop && (
+              <div style={{ display: "flex", alignItems: "center", color: "#666", fontSize: 12 }}>
+                <div style={{ 
+                  display: "inline-block", width: 12, height: 12,
+                  border: "2px solid #f3f3f3", borderTop: "2px solid #4caf50",
+                  borderRadius: "50%", animation: "spin 1s linear infinite", marginRight: 6
+                }}></div>
+                Pushing from desktop environment...
+              </div>
+            )}
+
+            {/* Desktop GitHub Push Result */}
+            {pushResultDesktop && (
+              <div style={{ 
+                marginTop: 12, padding: 10, borderRadius: 4, fontSize: 12,
+                background: pushResultDesktop.success ? "#e8f5e8" : "#fee",
+                border: `1px solid ${pushResultDesktop.success ? "#4caf50" : "#f44336"}`
+              }}>
+                <div style={{ fontWeight: 600, color: pushResultDesktop.success ? "#2e7d32" : "#d32f2f" }}>
+                  {pushResultDesktop.success ? '✅ Desktop Push Successful!' : '❌ Desktop Push Failed'}
+                </div>
+                <div style={{ color: pushResultDesktop.success ? "#2e7d32" : "#d32f2f", marginTop: 2 }}>
+                  {pushResultDesktop.message}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+      <div style={{ background: "#f9fafb", padding: 20, borderRadius: 8 }}>
+        <div style={{ marginBottom: 16 }}>
+          <h2 style={{ marginTop: 0, marginBottom: 8 }}>Backup Information</h2>
+          <p style={{ color: "#666", marginBottom: 12 }}>
+            Both backup types create a complete backup including code, data, and user uploads. 
+            Choose the version that matches your development environment.
+          </p>
+        </div>
+
+        {/* Backup Logs Section */}
+        {logs.length > 0 && (
+          <div style={{ 
+            background: "#f9fafb", 
+            padding: 16, 
+            borderRadius: 6, 
+            marginBottom: 16,
+            border: "1px solid #e0e0e0"
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>Browser Backup Logs</h3>
+            <div style={{ 
+              background: "#000", 
+              color: "#0f0", 
+              padding: 12, 
+              borderRadius: 4, 
+              fontFamily: "monospace", 
+              fontSize: 12,
+              maxHeight: 300,
+              overflowY: "auto"
+            }}>
+              {logs.map((log, index) => (
+                <div key={index}>{log}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Desktop Backup Logs Section */}
+        {logsDesktop.length > 0 && (
+          <div style={{ 
+            background: "#f0f8ff", 
+            padding: 16, 
+            borderRadius: 6, 
+            marginBottom: 16,
+            border: "1px solid #2196f3"
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>Desktop Backup Logs</h3>
+            <div style={{ 
+              background: "#000", 
+              color: "#0f0", 
+              padding: 12, 
+              borderRadius: 4, 
+              fontFamily: "monospace", 
+              fontSize: 12,
+              maxHeight: 300,
+              overflowY: "auto"
+            }}>
+              {logsDesktop.map((log, index) => (
+                <div key={index}>{log}</div>
+              ))}
+            </div>
           </div>
         )}
 

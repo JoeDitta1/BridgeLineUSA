@@ -19,8 +19,61 @@ export default function Settings() {
   const [supabaseAnonKey, setSupabaseAnonKey] = useState("");
   const [supabaseServiceKey, setSupabaseServiceKey] = useState("");
 
+  // QuickBooks settings state
+  const [qbSettings, setQbSettings] = useState(null);
+  const [qbEnabled, setQbEnabled] = useState(false);
+  const [qbConnectionType, setQbConnectionType] = useState("desktop");
+  const [qbCompanyFilePath, setQbCompanyFilePath] = useState("");
+  const [qbAppPath, setQbAppPath] = useState("");
+  const [qbConnectionMode, setQbConnectionMode] = useState("single_user");
+  const [qbUsername, setQbUsername] = useState("");
+  const [qbPassword, setQbPassword] = useState("");
+  const [qbCompanyId, setQbCompanyId] = useState("");
+  const [qbClientId, setQbClientId] = useState("");
+  const [qbClientSecret, setQbClientSecret] = useState("");
+  const [qbIsSandbox, setQbIsSandbox] = useState(true);
+  const [qbSearchItemTypes, setQbSearchItemTypes] = useState("inventory,non_inventory,service");
+  const [qbSearchFields, setQbSearchFields] = useState("name,description,manufacturer_part_number");
+  const [qbPreferredVendors, setQbPreferredVendors] = useState("");
+  const [qbConnectionTimeout, setQbConnectionTimeout] = useState(30);
+  const [qbSearchLimit, setQbSearchLimit] = useState(50);
+
+  // QB Purchase Order Settings
+  const [qbEnablePoSearch, setQbEnablePoSearch] = useState(true);
+  const [qbPoSearchDaysBack, setQbPoSearchDaysBack] = useState(90);
+  const [qbIncludePendingPos, setQbIncludePendingPos] = useState(true);
+  const [qbIncludeClosedPos, setQbIncludeClosedPos] = useState(true);
+
+  // QB Sales Order Settings
+  const [qbEnableSalesOrders, setQbEnableSalesOrders] = useState(false);
+  const [qbDefaultSalesAccount, setQbDefaultSalesAccount] = useState("");
+  const [qbDefaultSalesClass, setQbDefaultSalesClass] = useState("");
+  const [qbSalesTaxHandling, setQbSalesTaxHandling] = useState("auto");
+  const [qbAutoAssignSoNumbers, setQbAutoAssignSoNumbers] = useState(true);
+
+  // QB Customer Management Settings
+  const [qbEnableCustomerSync, setQbEnableCustomerSync] = useState(false);
+  const [qbAutoCreateCustomers, setQbAutoCreateCustomers] = useState(false);
+  const [qbDefaultCustomerTerms, setQbDefaultCustomerTerms] = useState("Net 30");
+  const [qbDefaultCustomerType, setQbDefaultCustomerType] = useState("");
+  const [qbCustomerNameFormat, setQbCustomerNameFormat] = useState("company_contact");
+
+  // QB Vendor Management Settings
+  const [qbEnableVendorSync, setQbEnableVendorSync] = useState(false);
+  const [qbAutoCreateVendors, setQbAutoCreateVendors] = useState(false);
+  const [qbDefaultVendorTerms, setQbDefaultVendorTerms] = useState("Net 30");
+  const [qbDefaultVendorType, setQbDefaultVendorType] = useState("");
+  const [qbVendorNameFormat, setQbVendorNameFormat] = useState("company_name");
+
+  // QB General Permissions
+  const [qbEnableItemCreation, setQbEnableItemCreation] = useState(false);
+  const [qbEnableAccountAccess, setQbEnableAccountAccess] = useState(false);
+  const [qbEnableReporting, setQbEnableReporting] = useState(false);
+  const [qbSyncFrequencyMinutes, setQbSyncFrequencyMinutes] = useState(60);
+
   useEffect(() => {
     loadSettings();
+    loadQbSettings();
   }, []);
 
   const loadSettings = async () => {
@@ -41,6 +94,73 @@ export default function Settings() {
       setSupabaseServiceKey(data.SUPABASE_SERVICE_KEY || "");
     } catch (e) {
       setErr(String(e.message || e));
+    }
+  };
+
+  const loadQbSettings = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/qb-settings`, { 
+        headers: getAuthHeaders(),
+        credentials: "include" 
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Failed");
+      const data = j.qbSettings || {};
+      setQbSettings(data);
+      
+      // Populate QB form fields
+      setQbEnabled(Boolean(data.enabled));
+      setQbConnectionType(data.connection_type || "desktop");
+      setQbCompanyFilePath(data.company_file_path || "");
+      setQbAppPath(data.qb_app_path || "");
+      setQbConnectionMode(data.connection_mode || "single_user");
+      setQbUsername(data.username || "");
+      setQbPassword(""); // Don't populate password for security
+      setQbCompanyId(data.company_id || "");
+      setQbClientId(data.client_id || "");
+      setQbClientSecret(""); // Don't populate client secret for security
+      setQbIsSandbox(Boolean(data.is_sandbox));
+      setQbSearchItemTypes(data.search_item_types || "inventory,non_inventory,service");
+      setQbSearchFields(data.search_fields || "name,description,manufacturer_part_number");
+      setQbPreferredVendors(data.preferred_vendors || "");
+      setQbConnectionTimeout(data.connection_timeout || 30);
+      setQbSearchLimit(data.search_limit || 50);
+      
+      // Purchase Order Settings
+      setQbEnablePoSearch(Boolean(data.enable_po_search !== undefined ? data.enable_po_search : true));
+      setQbPoSearchDaysBack(data.po_search_days_back || 90);
+      setQbIncludePendingPos(Boolean(data.include_pending_pos !== undefined ? data.include_pending_pos : true));
+      setQbIncludeClosedPos(Boolean(data.include_closed_pos !== undefined ? data.include_closed_pos : true));
+      
+      // Sales Order Settings
+      setQbEnableSalesOrders(Boolean(data.enable_sales_orders));
+      setQbDefaultSalesAccount(data.default_sales_account || "");
+      setQbDefaultSalesClass(data.default_sales_class || "");
+      setQbSalesTaxHandling(data.sales_tax_handling || "auto");
+      setQbAutoAssignSoNumbers(Boolean(data.auto_assign_so_numbers !== undefined ? data.auto_assign_so_numbers : true));
+      
+      // Customer Management Settings
+      setQbEnableCustomerSync(Boolean(data.enable_customer_sync));
+      setQbAutoCreateCustomers(Boolean(data.auto_create_customers));
+      setQbDefaultCustomerTerms(data.default_customer_terms || "Net 30");
+      setQbDefaultCustomerType(data.default_customer_type || "");
+      setQbCustomerNameFormat(data.customer_name_format || "company_contact");
+      
+      // Vendor Management Settings
+      setQbEnableVendorSync(Boolean(data.enable_vendor_sync));
+      setQbAutoCreateVendors(Boolean(data.auto_create_vendors));
+      setQbDefaultVendorTerms(data.default_vendor_terms || "Net 30");
+      setQbDefaultVendorType(data.default_vendor_type || "");
+      setQbVendorNameFormat(data.vendor_name_format || "company_name");
+      
+      // General Permissions
+      setQbEnableItemCreation(Boolean(data.enable_item_creation));
+      setQbEnableAccountAccess(Boolean(data.enable_account_access));
+      setQbEnableReporting(Boolean(data.enable_reporting));
+      setQbSyncFrequencyMinutes(data.sync_frequency_minutes || 60);
+    } catch (e) {
+      console.warn('Failed to load QB settings:', e);
+      // Don't set error since QB settings are optional
     }
   };
 
@@ -104,6 +224,115 @@ export default function Settings() {
       if (!res.ok) throw new Error(j?.error || "Failed to test API key");
       
       setSuccessMsg("OpenAI API key is valid and working!");
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveQbSettings = async () => {
+    setBusy(true);
+    setErr("");
+    setSuccessMsg("");
+    
+    try {
+      const payload = {
+        // Basic Connection
+        enabled: qbEnabled ? 1 : 0,
+        connection_type: qbConnectionType,
+        company_file_path: qbCompanyFilePath.trim() || null,
+        qb_app_path: qbAppPath.trim() || null,
+        connection_mode: qbConnectionMode,
+        username: qbUsername.trim() || null,
+        password: qbPassword.trim() || null,
+        company_id: qbCompanyId.trim() || null,
+        client_id: qbClientId.trim() || null,
+        client_secret: qbClientSecret.trim() || null,
+        is_sandbox: qbIsSandbox ? 1 : 0,
+        
+        // Material Search Settings
+        search_item_types: qbSearchItemTypes,
+        search_fields: qbSearchFields,
+        preferred_vendors: qbPreferredVendors.trim() || null,
+        connection_timeout: qbConnectionTimeout,
+        search_limit: qbSearchLimit,
+        
+        // Purchase Order Access
+        enable_po_search: qbEnablePoSearch ? 1 : 0,
+        po_search_days_back: qbPoSearchDaysBack,
+        include_pending_pos: qbIncludePendingPos ? 1 : 0,
+        include_closed_pos: qbIncludeClosedPos ? 1 : 0,
+        
+        // Sales Order Integration
+        enable_sales_orders: qbEnableSalesOrders ? 1 : 0,
+        default_sales_account: qbDefaultSalesAccount.trim() || null,
+        default_sales_class: qbDefaultSalesClass.trim() || null,
+        sales_tax_handling: qbSalesTaxHandling,
+        auto_assign_so_numbers: qbAutoAssignSoNumbers ? 1 : 0,
+        
+        // Customer Management
+        enable_customer_sync: qbEnableCustomerSync ? 1 : 0,
+        auto_create_customers: qbAutoCreateCustomers ? 1 : 0,
+        default_customer_terms: qbDefaultCustomerTerms,
+        default_customer_type: qbDefaultCustomerType.trim() || null,
+        customer_name_format: qbCustomerNameFormat,
+        
+        // Vendor Management
+        enable_vendor_sync: qbEnableVendorSync ? 1 : 0,
+        auto_create_vendors: qbAutoCreateVendors ? 1 : 0,
+        default_vendor_terms: qbDefaultVendorTerms,
+        default_vendor_type: qbDefaultVendorType.trim() || null,
+        vendor_name_format: qbVendorNameFormat,
+        
+        // General Permissions
+        enable_item_creation: qbEnableItemCreation ? 1 : 0,
+        enable_account_access: qbEnableAccountAccess ? 1 : 0,
+        enable_reporting: qbEnableReporting ? 1 : 0,
+        sync_frequency_minutes: qbSyncFrequencyMinutes
+      };
+
+      const res = await fetch(`${API_BASE}/api/admin/qb-settings`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        credentials: "include",
+        body: JSON.stringify(payload)
+      });
+
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Failed to save QuickBooks settings");
+      
+      setSuccessMsg("QuickBooks settings saved successfully!");
+      await loadQbSettings(); // Reload to confirm
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const testQbConnection = async () => {
+    setBusy(true);
+    setErr("");
+    setSuccessMsg("");
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/qb-settings/test-connection`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        credentials: "include"
+      });
+
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Failed to test QuickBooks connection");
+      
+      setSuccessMsg(j.message || "QuickBooks connection test completed!");
     } catch (e) {
       setErr(String(e.message || e));
     } finally {
@@ -246,6 +475,357 @@ export default function Settings() {
                 Test OpenAI API
               </button>
             </div>
+          </div>
+
+          <div style={{ background: "#f9fafb", padding: 20, borderRadius: 8, marginBottom: 20 }}>
+            <h2 style={{ marginTop: 0, marginBottom: 16 }}>QuickBooks Integration</h2>
+            
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", fontWeight: 600, marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={qbEnabled}
+                  onChange={e => setQbEnabled(e.target.checked)}
+                  style={{ marginRight: 8 }}
+                />
+                Enable QuickBooks Integration for AI BOM
+              </label>
+              <div style={{ fontSize: 12, color: "#666", marginLeft: 24 }}>
+                When enabled, AI Auto BOM will search QuickBooks for materials before falling back to online search
+              </div>
+            </div>
+
+            {qbEnabled && (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                    Connection Type
+                  </label>
+                  <select
+                    value={qbConnectionType}
+                    onChange={e => setQbConnectionType(e.target.value)}
+                    style={{ 
+                      width: "100%", 
+                      padding: 8, 
+                      border: "1px solid #ddd", 
+                      borderRadius: 4 
+                    }}
+                  >
+                    <option value="desktop">QuickBooks Desktop</option>
+                    <option value="online">QuickBooks Online</option>
+                  </select>
+                </div>
+
+                {qbConnectionType === "desktop" && (
+                  <>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                        Company File Path
+                      </label>
+                      <input
+                        type="text"
+                        value={qbCompanyFilePath}
+                        onChange={e => setQbCompanyFilePath(e.target.value)}
+                        placeholder="C:\Users\YourUser\Documents\QuickBooks\Company.QBW"
+                        style={{ 
+                          width: "100%", 
+                          padding: 8, 
+                          border: "1px solid #ddd", 
+                          borderRadius: 4,
+                          fontFamily: "monospace"
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                        QuickBooks Application Path (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={qbAppPath}
+                        onChange={e => setQbAppPath(e.target.value)}
+                        placeholder="C:\Program Files (x86)\QuickBooks\qbw.exe"
+                        style={{ 
+                          width: "100%", 
+                          padding: 8, 
+                          border: "1px solid #ddd", 
+                          borderRadius: 4,
+                          fontFamily: "monospace"
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                        Connection Mode
+                      </label>
+                      <select
+                        value={qbConnectionMode}
+                        onChange={e => setQbConnectionMode(e.target.value)}
+                        style={{ 
+                          width: "100%", 
+                          padding: 8, 
+                          border: "1px solid #ddd", 
+                          borderRadius: 4 
+                        }}
+                      >
+                        <option value="single_user">Single User</option>
+                        <option value="multi_user">Multi User</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                          Username (If Required)
+                        </label>
+                        <input
+                          type="text"
+                          value={qbUsername}
+                          onChange={e => setQbUsername(e.target.value)}
+                          style={{ 
+                            width: "100%", 
+                            padding: 8, 
+                            border: "1px solid #ddd", 
+                            borderRadius: 4 
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                          Password (If Required)
+                        </label>
+                        <input
+                          type="password"
+                          value={qbPassword}
+                          onChange={e => setQbPassword(e.target.value)}
+                          style={{ 
+                            width: "100%", 
+                            padding: 8, 
+                            border: "1px solid #ddd", 
+                            borderRadius: 4 
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {qbConnectionType === "online" && (
+                  <>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                        Company ID
+                      </label>
+                      <input
+                        type="text"
+                        value={qbCompanyId}
+                        onChange={e => setQbCompanyId(e.target.value)}
+                        placeholder="Your QuickBooks Online Company ID"
+                        style={{ 
+                          width: "100%", 
+                          padding: 8, 
+                          border: "1px solid #ddd", 
+                          borderRadius: 4,
+                          fontFamily: "monospace"
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                          Client ID
+                        </label>
+                        <input
+                          type="text"
+                          value={qbClientId}
+                          onChange={e => setQbClientId(e.target.value)}
+                          style={{ 
+                            width: "100%", 
+                            padding: 8, 
+                            border: "1px solid #ddd", 
+                            borderRadius: 4,
+                            fontFamily: "monospace"
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                          Client Secret
+                        </label>
+                        <input
+                          type="password"
+                          value={qbClientSecret}
+                          onChange={e => setQbClientSecret(e.target.value)}
+                          style={{ 
+                            width: "100%", 
+                            padding: 8, 
+                            border: "1px solid #ddd", 
+                            borderRadius: 4,
+                            fontFamily: "monospace"
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "flex", alignItems: "center", fontWeight: 600, marginBottom: 4 }}>
+                        <input
+                          type="checkbox"
+                          checked={qbIsSandbox}
+                          onChange={e => setQbIsSandbox(e.target.checked)}
+                          style={{ marginRight: 8 }}
+                        />
+                        Use Sandbox Environment
+                      </label>
+                      <div style={{ fontSize: 12, color: "#666", marginLeft: 24 }}>
+                        Enable for testing, disable for production
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                    Item Types to Search
+                  </label>
+                  <input
+                    type="text"
+                    value={qbSearchItemTypes}
+                    onChange={e => setQbSearchItemTypes(e.target.value)}
+                    placeholder="inventory,non_inventory,service"
+                    style={{ 
+                      width: "100%", 
+                      padding: 8, 
+                      border: "1px solid #ddd", 
+                      borderRadius: 4,
+                      fontFamily: "monospace"
+                    }}
+                  />
+                  <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                    Comma-separated list of QuickBooks item types to search
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                    Search Fields
+                  </label>
+                  <input
+                    type="text"
+                    value={qbSearchFields}
+                    onChange={e => setQbSearchFields(e.target.value)}
+                    placeholder="name,description,manufacturer_part_number"
+                    style={{ 
+                      width: "100%", 
+                      padding: 8, 
+                      border: "1px solid #ddd", 
+                      borderRadius: 4,
+                      fontFamily: "monospace"
+                    }}
+                  />
+                  <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                    QuickBooks fields to search for material matches
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                    Preferred Vendors (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={qbPreferredVendors}
+                    onChange={e => setQbPreferredVendors(e.target.value)}
+                    placeholder="Steel Supply LP,McMaster-Carr,Grainger"
+                    style={{ 
+                      width: "100%", 
+                      padding: 8, 
+                      border: "1px solid #ddd", 
+                      borderRadius: 4 
+                    }}
+                  />
+                  <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                    Comma-separated list of vendor names to prioritize
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                      Connection Timeout (seconds)
+                    </label>
+                    <input
+                      type="number"
+                      min="10"
+                      max="120"
+                      value={qbConnectionTimeout}
+                      onChange={e => setQbConnectionTimeout(parseInt(e.target.value) || 30)}
+                      style={{ 
+                        width: "100%", 
+                        padding: 8, 
+                        border: "1px solid #ddd", 
+                        borderRadius: 4 
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                      Search Result Limit
+                    </label>
+                    <input
+                      type="number"
+                      min="10"
+                      max="200"
+                      value={qbSearchLimit}
+                      onChange={e => setQbSearchLimit(parseInt(e.target.value) || 50)}
+                      style={{ 
+                        width: "100%", 
+                        padding: 8, 
+                        border: "1px solid #ddd", 
+                        borderRadius: 4 
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 12 }}>
+                  <button
+                    onClick={saveQbSettings}
+                    disabled={busy}
+                    style={{ 
+                      padding: "10px 20px", 
+                      background: "#1976d2", 
+                      color: "white", 
+                      border: "none", 
+                      borderRadius: 6,
+                      cursor: busy ? "not-allowed" : "pointer",
+                      opacity: busy ? 0.6 : 1
+                    }}
+                  >
+                    {busy ? "Saving..." : "Save QB Settings"}
+                  </button>
+                  
+                  <button
+                    onClick={testQbConnection}
+                    disabled={busy}
+                    style={{ 
+                      padding: "10px 20px", 
+                      background: "#4caf50", 
+                      color: "white", 
+                      border: "none", 
+                      borderRadius: 6,
+                      cursor: busy ? "not-allowed" : "pointer",
+                      opacity: busy ? 0.6 : 1
+                    }}
+                  >
+                    Test QB Connection
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           <div style={{ background: "#f9fafb", padding: 20, borderRadius: 8 }}>

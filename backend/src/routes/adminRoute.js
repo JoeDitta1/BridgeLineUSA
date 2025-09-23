@@ -161,6 +161,171 @@ router.post('/test-openai', async (req, res) => {
   }
 });
 
+/* ======================== QUICKBOOKS SETTINGS ======================== */
+
+// GET /api/admin/qb-settings - Get QuickBooks integration settings
+router.get('/qb-settings', (req, res) => {
+  try {
+    let qbSettings = db.prepare('SELECT * FROM qb_settings WHERE id = 1').get();
+    
+    if (!qbSettings) {
+      // Return comprehensive default settings if none exist
+      qbSettings = {
+        id: 1, enabled: 0, connection_type: 'desktop', connection_mode: 'single_user', is_sandbox: 1,
+        // Material Search
+        search_item_types: 'inventory,non_inventory,service', search_fields: 'name,description,manufacturer_part_number',
+        connection_timeout: 30, search_limit: 50,
+        // Purchase Orders
+        enable_po_search: 1, po_search_days_back: 90, include_pending_pos: 1, include_closed_pos: 1,
+        // Sales Orders
+        enable_sales_orders: 0, sales_tax_handling: 'auto', auto_assign_so_numbers: 1,
+        // Customers
+        enable_customer_sync: 0, auto_create_customers: 0, default_customer_terms: 'Net 30', customer_name_format: 'company_contact',
+        // Vendors
+        enable_vendor_sync: 0, auto_create_vendors: 0, default_vendor_terms: 'Net 30', vendor_name_format: 'company_name',
+        // General
+        enable_item_creation: 0, enable_account_access: 0, enable_reporting: 0, sync_frequency_minutes: 60
+      };
+    }
+    
+    // Don't send sensitive data to frontend
+    const safeSettings = { ...qbSettings };
+    delete safeSettings.password;
+    delete safeSettings.client_secret;
+    delete safeSettings.access_token;
+    
+    res.json({ ok: true, qbSettings: safeSettings });
+  } catch (e) {
+    console.error('[admin:qb-settings GET] error:', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// PUT /api/admin/qb-settings - Update QuickBooks integration settings
+router.put('/qb-settings', (req, res) => {
+  try {
+    const {
+      enabled, connection_type, company_file_path, qb_app_path, connection_mode,
+      username, password, company_id, client_id, client_secret, access_token, is_sandbox,
+      
+      // Material Search Settings
+      search_item_types, search_fields, preferred_vendors, connection_timeout, search_limit,
+      
+      // Purchase Order Access
+      enable_po_search, po_search_days_back, include_pending_pos, include_closed_pos,
+      
+      // Sales Order Integration
+      enable_sales_orders, default_sales_account, default_sales_class, 
+      sales_tax_handling, auto_assign_so_numbers,
+      
+      // Customer Management
+      enable_customer_sync, auto_create_customers, default_customer_terms, 
+      default_customer_type, customer_name_format,
+      
+      // Vendor Management
+      enable_vendor_sync, auto_create_vendors, default_vendor_terms, 
+      default_vendor_type, vendor_name_format,
+      
+      // General Permissions
+      enable_item_creation, enable_account_access, enable_reporting, sync_frequency_minutes
+    } = req.body;
+
+    // Prepare comprehensive update statement
+    const upsertStmt = db.prepare(`
+      INSERT OR REPLACE INTO qb_settings (
+        id, enabled, connection_type, company_file_path, qb_app_path, connection_mode,
+        username, password, company_id, client_id, client_secret, access_token, is_sandbox,
+        search_item_types, search_fields, preferred_vendors, connection_timeout, search_limit,
+        enable_po_search, po_search_days_back, include_pending_pos, include_closed_pos,
+        enable_sales_orders, default_sales_account, default_sales_class, sales_tax_handling, auto_assign_so_numbers,
+        enable_customer_sync, auto_create_customers, default_customer_terms, default_customer_type, customer_name_format,
+        enable_vendor_sync, auto_create_vendors, default_vendor_terms, default_vendor_type, vendor_name_format,
+        enable_item_creation, enable_account_access, enable_reporting, sync_frequency_minutes,
+        updated_at
+      ) VALUES (
+        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')
+      )
+    `);
+
+    upsertStmt.run(
+      // Basic Connection
+      enabled || 0, connection_type || 'desktop', company_file_path || null, qb_app_path || null, 
+      connection_mode || 'single_user', username || null, password || null, company_id || null,
+      client_id || null, client_secret || null, access_token || null, is_sandbox || 1,
+      
+      // Material Search
+      search_item_types || 'inventory,non_inventory,service', search_fields || 'name,description,manufacturer_part_number',
+      preferred_vendors || null, connection_timeout || 30, search_limit || 50,
+      
+      // Purchase Orders
+      enable_po_search !== undefined ? enable_po_search : 1, po_search_days_back || 90,
+      include_pending_pos !== undefined ? include_pending_pos : 1, include_closed_pos !== undefined ? include_closed_pos : 1,
+      
+      // Sales Orders
+      enable_sales_orders || 0, default_sales_account || null, default_sales_class || null,
+      sales_tax_handling || 'auto', auto_assign_so_numbers !== undefined ? auto_assign_so_numbers : 1,
+      
+      // Customers
+      enable_customer_sync || 0, auto_create_customers || 0, default_customer_terms || 'Net 30',
+      default_customer_type || null, customer_name_format || 'company_contact',
+      
+      // Vendors
+      enable_vendor_sync || 0, auto_create_vendors || 0, default_vendor_terms || 'Net 30',
+      default_vendor_type || null, vendor_name_format || 'company_name',
+      
+      // General
+      enable_item_creation || 0, enable_account_access || 0, enable_reporting || 0, sync_frequency_minutes || 60
+    );
+
+    res.json({ ok: true, message: 'QuickBooks settings updated successfully' });
+  } catch (e) {
+    console.error('[admin:qb-settings PUT] error:', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// POST /api/admin/qb-settings/test-connection - Test QuickBooks connection
+router.post('/qb-settings/test-connection', async (req, res) => {
+  try {
+    const qbSettings = db.prepare('SELECT * FROM qb_settings WHERE id = 1').get();
+    
+    if (!qbSettings || !qbSettings.enabled) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'QuickBooks integration is not enabled' 
+      });
+    }
+
+    // For now, just validate settings exist
+    // TODO: Implement actual QB connection testing when integrating with AI BOM
+    if (qbSettings.connection_type === 'desktop') {
+      if (!qbSettings.company_file_path) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Company file path is required for QuickBooks Desktop'
+        });
+      }
+    } else if (qbSettings.connection_type === 'online') {
+      if (!qbSettings.client_id || !qbSettings.company_id) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Client ID and Company ID are required for QuickBooks Online'
+        });
+      }
+    }
+
+    res.json({ 
+      ok: true, 
+      message: 'QuickBooks settings validated successfully',
+      note: 'Connection testing will be implemented when integrating with AI BOM'
+    });
+  } catch (e) {
+    console.error('[admin:qb-settings test-connection] error:', e);
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 router.get('/equipment', (req, res) => {
   try {
     let rows = [];
